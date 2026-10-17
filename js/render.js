@@ -1,7 +1,7 @@
 // 저해상도 버퍼(180x320)에 월드를 그린다: 배경, 방석, 고양이, 크레인, 파티클, 카메라.
-import { VIEW_W, VIEW_H, CAT_TYPES, CFG } from './config.js?v=1.4.0';
-import { P, Grid, makeCanvas, catSprite, catSpriteRot, ROT_STEPS, getIcons, numText } from './sprites.js?v=1.4.0';
-import { TEXTURES } from './textures.js?v=1.4.0';
+import { VIEW_W, VIEW_H, extraH, CAT_TYPES, CFG } from './config.js?v=1.5.0';
+import { P, Grid, makeCanvas, catSprite, catSpriteRot, ROT_STEPS, getIcons, numText } from './sprites.js?v=1.5.0';
+import { TEXTURES } from './textures.js?v=1.5.0';
 
 const SC = {
   wall: '#f7dcc6', wallL: '#fbe8d8', wallD: '#e9c4ab',
@@ -248,6 +248,9 @@ function buildMoon() {
 
 // ---------- 렌더러 ----------
 
+// 바닥에 있을 때 카메라 윗변. 화면이 길어진 만큼 위(천장 쪽)를 더 보여 주되 천장(-300) 위 지붕까지는 안 올라가고, 나머지는 바닥 쪽으로.
+const camRest = () => Math.max(-300, -280 - Math.round(extraH() * 0.6));
+
 export class Renderer {
   constructor() {
     this.buf = makeCanvas(VIEW_W, VIEW_H);
@@ -259,7 +262,7 @@ export class Renderer {
     this.earth = buildEarth();
     this.moon = buildMoon();
     this.icons = getIcons();
-    this.camTop = -280;
+    this.camTop = camRest();
     this.shake = 0;
     this.shakeAmp = 0;
     this.particles = [];
@@ -270,8 +273,16 @@ export class Renderer {
     this.tour = null;
   }
 
+  // 화면 세로 칸 수(VIEW_H)가 바뀌면 버퍼를 새로 만든다
+  resize() {
+    this.buf = makeCanvas(VIEW_W, VIEW_H);
+    this.ctx = this.buf.getContext('2d');
+    this.ctx.imageSmoothingEnabled = false;
+    this.camTop = Math.min(this.camTop, camRest());
+  }
+
   reset() {
-    this.camTop = -280;
+    this.camTop = camRest();
     this.particles.length = 0;
     this.screenParticles.length = 0;
     this.fx.clear();
@@ -280,7 +291,7 @@ export class Renderer {
   }
 
   camTarget(game) {
-    return Math.min(game.crane.y - 60, -280);
+    return Math.min(game.crane.y - 60, camRest());
   }
 
   // 게임 이벤트에 맞춘 연출
@@ -344,7 +355,7 @@ export class Renderer {
     if (mode === 'over') {
       this.tour = (this.tour ?? 0) + dt;
       const k = (1 - Math.cos(Math.max(0, this.tour - 0.8) * 0.45)) / 2;
-      target = target + (-280 - target) * k;
+      target = target + (camRest() - target) * k;
     } else this.tour = null;
     this.camTop += (target - this.camTop) * Math.min(1, dt * 4);
     if (this.shake > 0) this.shake -= dt; else this.shakeAmp = 0;

@@ -1,9 +1,9 @@
 // 실제 게임 페이지(index.html)에서 도는 브라우저 테스트.
 // 진짜 pointerdown/keydown 이벤트를 캔버스·window에 보내고, 화면 버퍼 픽셀까지 확인한다.
 // 사용: 게임 페이지에서 `const { run } = await import('/tests/e2e.mjs'); await run()`
-import { VIEW_W, VIEW_H, CAT_TYPES, CFG } from '../js/config.js?v=1.4.0';
-import { Audio } from '../js/audio.js?v=1.4.0';
-import * as storage from '../js/storage.js?v=1.4.0';
+import { VIEW_W, VIEW_H, CAT_TYPES, CFG } from '../js/config.js?v=1.5.0';
+import { Audio } from '../js/audio.js?v=1.5.0';
+import * as storage from '../js/storage.js?v=1.5.0';
 
 const N = () => window.__nyang;
 const canvas = () => document.getElementById('game');
@@ -46,7 +46,7 @@ export async function run() {
   await test('[1] 타이틀 → [시작] → 3초 안에 첫 고양이가 크레인에서 좌우로 움직인다', () => {
     home();
     assert(N().mode === 'title' && hasButton('start') && hasButton('daily') && hasButton('dex'), '타이틀 버튼 없음');
-    tap(90, 208);
+    { const b = N().ui.buttons.find(x => x.id === 'start'); tap(b.x + b.w / 2, b.y + b.h / 2); }
     assert(N().mode === 'play', '시작 안 됨: ' + N().mode);
     let t = 0;
     while (N().game.crane.type === null && t < 3) { N().advance(0.1); t += 0.1; }
@@ -80,12 +80,12 @@ export async function run() {
     // 놓은 횟수(count)로 판정: 앞서 놓은 고양이가 방석 밖으로 떨어져 cats가 줄어드는 건 상관없다
     const n = N().game.count;
     const m0 = N().store.muted; // 저장된 이전 상태에 상관없이 '바뀌는지'를 본다
-    tap(32, 307); // 소리
+    tap(32, VIEW_H - 13); // 소리
     assert(N().store.muted === !m0, '소리 버튼 반응 없음');
-    tap(32, 307);
+    tap(32, VIEW_H - 13);
     assert(N().store.muted === m0, '소리 버튼 두 번째 반응 없음');
     assert(N().game.count === n, '소리 버튼에서 고양이를 놓음');
-    tap(13, 307); // 일시정지
+    tap(13, VIEW_H - 13); // 일시정지
     assert(N().mode === 'pause', '일시정지 안 됨');
     assert(N().game.count === n, '일시정지 버튼에서 고양이를 놓음');
   });
@@ -246,15 +246,16 @@ export async function run() {
     assert(cell1.has('#34334a'), '실루엣 색 없음');
   });
 
-  await test('[24] 화면이 정수 배율로 확대된다', () => {
+  await test('[24] 화면 배율: PC는 정수 배율, 세로 칸 수는 화면 비율에 맞춤', () => {
     const c = canvas();
     const k = c.width / VIEW_W;
-    assert(Number.isInteger(k) && c.height / VIEW_H === k, `캔버스 ${c.width}x${c.height}`);
     const dpr = window.devicePixelRatio || 1;
+    if (dpr < 2) assert(Number.isInteger(k) && c.height / VIEW_H === k, `캔버스 ${c.width}x${c.height}`);
+    assert(VIEW_H >= 320 && VIEW_H <= 440 && N().renderer.buf.height === VIEW_H, `VIEW_H ${VIEW_H}, 버퍼 ${N().renderer.buf.height}`);
     assert(Math.abs(parseFloat(c.style.width) * dpr - c.width) < 0.5, 'CSS 크기 불일치');
     assert(getComputedStyle(c).imageRendering.includes('pixel') || getComputedStyle(c).imageRendering.includes('crisp'), 'image-rendering');
     assert(c.getContext('2d').imageSmoothingEnabled === false, '스무딩 켜짐');
-    return `${k}배 (${c.width}x${c.height}, dpr ${dpr})`;
+    return `${k}배 (${c.width}x${c.height}, 세로 ${VIEW_H}칸, dpr ${dpr})`;
   });
 
   await test('[25] 가로 스크롤 없이 게임 화면 전체가 보인다', () => {
@@ -281,7 +282,7 @@ export async function run() {
   });
 
   await test('[30] 기울어진 고양이: 모든 종·각도에서 픽셀이 빠지지 않고 눈이 남는다', async () => {
-    const s = await import('../js/sprites.js?v=1.4.0');
+    const s = await import('../js/sprites.js?v=1.5.0');
     const stat = cv => {
       const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
       let n = 0, holes = 0, eye = 0;
@@ -310,7 +311,7 @@ export async function run() {
   });
 
   await test('[31] 숫자·영문 도트 글자: 게임에 쓰는 글자가 모두 정의돼 있다', async () => {
-    const s = await import('../js/sprites.js?v=1.4.0');
+    const s = await import('../js/sprites.js?v=1.5.0');
     const blank = s.numText(' ');
     for (const ch of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.!?/+-:m') {
       const c = s.numText(ch).getContext('2d'), d = c.getImageData(0, 0, c.canvas.width, c.canvas.height).data;
