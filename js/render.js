@@ -1,7 +1,7 @@
 // 저해상도 버퍼(180x320)에 월드를 그린다: 배경, 방석, 고양이, 크레인, 파티클, 카메라.
-import { VIEW_W, VIEW_H, extraH, CAT_TYPES, CFG } from './config.js?v=1.5.0';
-import { P, Grid, makeCanvas, catSprite, catSpriteRot, ROT_STEPS, getIcons, numText } from './sprites.js?v=1.5.0';
-import { TEXTURES } from './textures.js?v=1.5.0';
+import { VIEW_W, VIEW_H, extraH, CAT_TYPES, CFG } from './config.js?v=1.5.1';
+import { P, Grid, makeCanvas, catSprite, catSpriteRot, ROT_STEPS, getIcons, numText } from './sprites.js?v=1.5.1';
+import { TEXTURES } from './textures.js?v=1.5.1';
 
 const SC = {
   wall: '#f7dcc6', wallL: '#fbe8d8', wallD: '#e9c4ab',
