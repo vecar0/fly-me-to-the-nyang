@@ -1,0 +1,248 @@
+// 게임 규칙 + 물리. DOM 없이 돌아간다 (Matter는 globalThis.Matter).
+// 좌표: 월드 픽셀, y는 아래로 증가. 방석 윗면이 y=0, 높이 h = -y.
+import { CAT_TYPES, ZONES, CFG, S } from './config.js';
+import { mulberry32, pickType, craneSpeed, createWind, updateWind } from './spawner.js';
+
+const STEP = 1 / 60;
+const SUBSTEPS = 6; // 2로는 쌓인 탑이 10여 마리에서 저절로 무너져서 6으로 올림 (비용은 스텝당 0.1ms 미만)
+
+export function zoneIndexAt(h) {
+  let z = 0;
+  for (let i = 0; i < ZONES.length; i++) if (h >= ZONES[i].from) z = i;
+  return z;
+}
+
+export class Game {
+  constructor({ seed = (Math.random() * 2 ** 32) >>> 0, hearts = CFG.hearts } = {}) {
+    const { Engine, Bodies, Composite, Events } = globalThis.Matter;
+    this.rng = mulberry32(seed);
+    this.engine = Engine.create({ enableSleeping: true, positionIterations: 10, velocityIterations: 8 });
+    this.engine.gravity.y = CFG.gravity;
+    this.cushion = Bodies.rectangle(CFG.cushionX * S, (CFG.cushionH / 2) * S, CFG.cushionW * S, CFG.cushionH * S, {
+      isStatic: true, friction: 1, frictionStatic: 1.2, chamfer: { radius: 2 * S }, label: 'cushion',
+    });
+    Composite.add(this.engine.world, this.cushion);
+
+    this.cats = [];
+    this.byBody = new Map();
+    this.events = [];
+    this.time = 0;
+    this.hearts = hearts;
+    this.height = 0;
+    this.landedTop = 0;
+    this.best = 0;
+    this.count = 0;
+    this.perfects = 0;
+    this.over = false;
+    this.zone = 0;
+    this.nextId = 1;
+    this.history = [];
+    this.wind = createWind();
+    this.crane = { x: CFG.cushionX, dir: 1, y: -CFG.craneAbove, type: null, flip: false, cooldown: 0, speed: CFG.craneBase };
+    this.nextType = this._pick();
+    this.nextFlip = this.rng() < 0.5;
+    this._loadCrane();
+
+    Events.on(this.engine, 'collisionStart', e => this._onCollide(e));
+  }
+
+  _pick() {
+    const t = pickType(this.rng, this.best, this.history);
+    this.history.push(t);
+    if (this.history.length > 4) this.history.shift();
+    return t;
+  }
+
+  _loadCrane() {
+    this.crane.type = this.nextType;
+    this.crane.flip = this.nextFlip;
+    this.nextType = this._pick();
+    this.nextFlip = this.rng() < 0.5;
+    this.events.push({ type: 'spawn', catType: this.crane.type });
+  }
+
+  // 크레인에 매달린 고양이의 중심 y
+  heldY() {
+    const t = CAT_TYPES[this.crane.type ?? 0];
+    return this.crane.y + t.h / 2 + 3;
+  }
+
+  canDrop() { return !this.over && this.crane.type !== null; }
+
+  // x를 주면 그 위치에서 놓는다 (테스트용)
+  drop(x) {
+    if (!this.canDrop()) return false;
+    const typeIdx = this.crane.type;
+    const t = CAT_TYPES[typeIdx];
+    const px = x ?? this.crane.x;
+    const body = this._makeBody(t, px, this.heldY());
+    const b = body.bounds;
+    const cat = {
+      id: this.nextId++, type: typeIdx, body, flip: this.crane.flip,
+      off: { x: body.position.x / S - (b.min.x + b.max.x) / 2 / S, y: body.position.y / S - (b.min.y + b.max.y) / 2 / S },
+      landed: false, landT: -1, settled: false, still: 0, frozen: false, support: null,
+    };
+    this.cats.push(cat);
+    this.byBody.set(body.id, cat);
+    globalThis.Matter.Composite.add(this.engine.world, body);
+    this.crane.type = null;
+    this.crane.cooldown = CFG.respawnDelay;
+    this.count++;
+    this.events.push({ type: 'drop', cat });
+    return true;
+  }
+
+  _makeBody(t, x, y) {
+    const { Bodies, Body } = globalThis.Matter;
+    const o = { friction: t.friction, frictionStatic: 1.2, restitution: t.bounce ?? 0.02, frictionAir: 0.004, label: 'cat' };
+    let body;
+    // 둥근 모서리를 그림만큼 크게 주면 착지 후 2초 가까이 흔들려서 물리는 최대 2px만 깎는다
+    if (t.shape === 'rect') body = Bodies.rectangle(x * S, y * S, t.w * S, t.h * S, { ...o, chamfer: { radius: Math.min(t.r, 2) * S } });
+    else if (t.shape === 'circle') body = Bodies.circle(x * S, y * S, (t.w / 2) * S, o, 24);
+    else {
+      body = Bodies.fromVertices(x * S, y * S, [t.verts.map(([vx, vy]) => ({ x: vx * S, y: vy * S }))], o);
+    }
+    Body.setMass(body, t.mass * 10);
+    return body;
+  }
+
+  _onCollide(e) {
+    for (const p of e.pairs) {
+      for (const [a, b] of [[p.bodyA, p.bodyB], [p.bodyB, p.bodyA]]) {
+        const cat = this.byBody.get(a.id);
+        if (!cat || cat.landed) continue;
+        cat.landed = true;
+        cat.landT = this.time;
+        cat.support = b;
+        this.events.push({ type: 'land', cat, speed: a.speed / S });
+      }
+    }
+  }
+
+  update(dt = STEP) {
+    const { Engine, Sleeping } = globalThis.Matter;
+    this.time += dt;
+    const c = this.crane;
+
+    if (!this.over) {
+      const held = c.type !== null ? CAT_TYPES[c.type] : null;
+      const half = held ? held.w / 2 : 0;
+      c.speed = craneSpeed(this.count, this.height, this.time);
+      c.x += c.dir * c.speed * dt;
+      const lo = CFG.craneMargin + half, hi = 180 - CFG.craneMargin - half;
+      if (c.x > hi) { c.x = hi; c.dir = -1; }
+      if (c.x < lo) { c.x = lo; c.dir = 1; }
+      if (c.type === null) {
+        c.cooldown -= dt;
+        if (c.cooldown <= 0) this._loadCrane();
+      }
+    }
+    // 안착 판정이 늦어도 크레인이 탑에 파묻히지 않게, 착지한 고양이 꼭대기도 함께 본다
+    const targetY = -Math.max(this.height, this.landedTop) - CFG.craneAbove;
+    c.y += (targetY - c.y) * Math.min(1, dt * 3);
+
+    updateWind(this.wind, dt, this.height, this.rng);
+    const blowing = this.wind.phase === 'blow';
+    const g = this.engine.gravity.y * this.engine.gravity.scale;
+    const slowFall = this.height >= CFG.spaceFrom;
+
+    const sub = this.substeps ?? SUBSTEPS;
+    for (let s = 0; s < sub; s++) {
+      for (const cat of this.cats) {
+        const b = cat.body;
+        if (b.isStatic) continue;
+        if (blowing && cat.landed) {
+          if (b.isSleeping) Sleeping.set(b, false);
+          b.force.x += this.wind.dir * b.mass * g * CFG.windG;
+        }
+        if (slowFall && !cat.landed) b.force.y -= b.mass * g * (1 - CFG.spaceFallScale);
+      }
+      Engine.update(this.engine, (dt * 1000) / sub);
+    }
+
+    this._afterPhysics(dt);
+  }
+
+  _afterPhysics(dt) {
+    const { Composite, Body } = globalThis.Matter;
+    let top = 0, landedTop = 0;
+    for (let i = this.cats.length - 1; i >= 0; i--) {
+      const cat = this.cats[i];
+      const b = cat.body;
+      if (b.position.y / S > CFG.fallY) {
+        Composite.remove(this.engine.world, b);
+        this.byBody.delete(b.id);
+        this.cats.splice(i, 1);
+        if (!this.over) {
+          this.hearts--;
+          this.events.push({ type: 'fall', cat, x: b.position.x / S });
+          if (this.hearts <= 0) { this.over = true; this.events.push({ type: 'gameover' }); }
+        }
+        continue;
+      }
+      if (cat.landed) landedTop = Math.max(landedTop, -b.bounds.min.y / S);
+      if (b.isStatic) { top = Math.max(top, -b.bounds.min.y / S); continue; }
+      const moving = b.speed > CFG.settleSpeed || b.angularSpeed > CFG.settleAngular;
+      cat.still = cat.landed && !moving ? cat.still + dt : 0;
+      if (!cat.settled && cat.still >= CFG.settleTime) {
+        cat.settled = true;
+        const sup = cat.support && (cat.support.label === 'cushion' || this.byBody.has(cat.support.id)) ? cat.support : null;
+        if (sup && Math.abs(b.position.x - sup.position.x) / S <= CFG.perfectTol) {
+          this.perfects++;
+          this.events.push({ type: 'perfect', cat });
+        }
+        this.events.push({ type: 'settle', cat });
+      }
+      if (cat.settled) top = Math.max(top, -b.bounds.min.y / S);
+    }
+
+    this.height = top;
+    this.landedTop = landedTop;
+    if (top > this.best && !this.over) this.best = top; // 게임오버 후엔 기록 고정
+    const z = zoneIndexAt(this.best);
+    if (z > this.zone) { this.zone = z; this.events.push({ type: 'zone', zone: z }); }
+
+    // 동결: 꼭대기에서 멀리 내려간 안착 고양이
+    const limit = (-this.height + CFG.freezeDepth) * S;
+    let dynamic = [];
+    for (const cat of this.cats) {
+      const b = cat.body;
+      if (b.isStatic) continue;
+      if (cat.settled && b.bounds.min.y > limit) this._freeze(cat);
+      else dynamic.push(cat);
+    }
+    if (dynamic.length > CFG.maxDynamic) {
+      dynamic = dynamic.filter(c => c.settled).sort((a, b) => b.body.position.y - a.body.position.y);
+      let extra = this.dynamicCount() - CFG.maxDynamic;
+      for (const cat of dynamic) {
+        if (extra-- <= 0) break;
+        this._freeze(cat);
+      }
+    }
+  }
+
+  _freeze(cat) {
+    globalThis.Matter.Body.setStatic(cat.body, true);
+    cat.frozen = true;
+  }
+
+  dynamicCount() {
+    let n = 0;
+    for (const c of this.cats) if (!c.body.isStatic) n++;
+    return n;
+  }
+
+  drainEvents() {
+    const e = this.events;
+    this.events = [];
+    return e;
+  }
+
+  // 화면 표시용 픽셀 좌표
+  catPos(cat) {
+    const b = cat.body;
+    return { x: b.position.x / S, y: b.position.y / S, angle: b.angle };
+  }
+}
+
+export { STEP };
