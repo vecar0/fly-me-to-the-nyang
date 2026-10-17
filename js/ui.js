@@ -1,7 +1,7 @@
 // HUD, 타이틀, 일시정지, 게임오버, 도감. 전부 저해상도 버퍼에 픽셀로 그린다.
-import { VIEW_W, VIEW_H, CAT_TYPES, ZONES } from './config.js?v=1.3.0';
-import { P, Grid, makeCanvas, catSprite, catSilhouette, numText, getIcons } from './sprites.js?v=1.3.0';
-import { VERSION } from './version.js?v=1.3.0';
+import { VIEW_W, VIEW_H, CAT_TYPES, ZONES } from './config.js?v=1.4.0';
+import { P, Grid, makeCanvas, catSprite, catSilhouette, numText, getIcons } from './sprites.js?v=1.4.0';
+import { VERSION } from './version.js?v=1.4.0';
 
 // 한글 픽셀 폰트 Galmuri(OFL, fonts/OFL-Galmuri.txt). 정해진 크기(11 Bold=12px, 9=10px)로만 그려야 픽셀이 칸에 딱 맞는다.
 // size 10 이하는 작은 글씨, 그 외는 굵은 글씨. 더 크게는 drawCentered의 정수 배율로 키운다.
@@ -41,11 +41,29 @@ export function pxText(str, { size = 11, color = P.white, outline = P.line, thre
   const a = tc.getImageData(0, 0, w, h).data;
   const g = new Grid(w + 2, h + 2);
   const on = (x, y) => x >= 0 && y >= 0 && x < w && y < h && a[(y * w + x) * 4 + 3] >= thresh;
+  // 글자 바깥 빈칸만 표시 (ㅇ·ㅁ·A 속 구멍은 제외) → 외곽선이 글자 속을 메워 뭉개지지 않게
+  const outside = new Uint8Array((w + 2) * (h + 2));
+  if (outline) {
+    const q = [0];
+    outside[0] = 1;
+    while (q.length) {
+      const i = q.pop(), x = i % (w + 2), y = (i / (w + 2)) | 0;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const X = x + dx, Y = y + dy, j = Y * (w + 2) + X;
+        if (X < 0 || Y < 0 || X >= w + 2 || Y >= h + 2 || outside[j] || on(X - 1, Y - 1)) continue;
+        outside[j] = 1;
+        q.push(j);
+      }
+    }
+  }
+  // 작은 글씨(10px)는 획 사이가 1칸이라 테두리를 두르면 붙어 버린다 → 아래쪽 1칸 그림자만
+  const shadowOnly = face === FACES.small;
   for (let y = -1; y <= h; y++) for (let x = -1; x <= w; x++) {
     if (on(x, y)) g.set(x + 1, y + 1, color);
-    else if (outline) {
+    else if (outline && outside[(y + 1) * (w + 2) + x + 1]) {
       let near = false;
-      for (let dy = -1; dy <= 1 && !near; dy++) for (let dx = -1; dx <= 1; dx++) if (on(x + dx, y + dy)) { near = true; break; }
+      if (shadowOnly) near = on(x, y - 1) || on(x - 1, y - 1);
+      else for (let dy = -1; dy <= 1 && !near; dy++) for (let dx = -1; dx <= 1; dx++) if (on(x + dx, y + dy)) { near = true; break; }
       if (near) g.set(x + 1, y + 1, outline);
     }
   }
@@ -205,7 +223,7 @@ export class UI {
     const nyangS = pxText('냥!', { size: 18, color: P.line, outline: P.line });
     drawCentered(ctx, nyangS, VIEW_W / 2, 40 + bob2 + 4, 4);
     drawCentered(ctx, nyang, VIEW_W / 2, 40 + bob2, 4);
-    drawCentered(ctx, pxText('FLY ME TO THE NYANG', { size: 10, color: P.pink, outline: P.line }), VIEW_W / 2, 104);
+    drawCentered(ctx, pxText('FLY ME TO THE NYANG', { size: 11, color: P.pink, outline: P.line }), VIEW_W / 2, 101);
 
     // 최고 기록: 반투명 알약 위에 트로피 + 숫자
     const best = numText((store.best / 100).toFixed(2) + 'm', P.yellow);

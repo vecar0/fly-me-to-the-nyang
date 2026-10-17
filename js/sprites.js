@@ -1,5 +1,5 @@
 // 팔레트 + 픽셀 스프라이트 생성. 모든 그림은 이 팔레트 색으로만 칠한다.
-import { CAT_TYPES } from './config.js?v=1.3.0';
+import { CAT_TYPES } from './config.js?v=1.4.0';
 
 export const P = {
   line: '#3a2838', eye: '#2a1f2e', white: '#fffaf2', paper: '#f3ece4',
@@ -328,6 +328,102 @@ export function catSprite(ti, expr = 'calm') {
   return s;
 }
 
+// ---- 기울어진 고양이: RotSprite 방식 ----
+// 캔버스로 바로 돌리면 픽셀이 빠지거나 겹쳐서 눈·입이 깨진다.
+// Scale2x를 두 번 해 4배로 매끈하게 키운 뒤, 회전된 각 칸의 중심 한 점만 집어 와 원래 크기로 되돌린다.
+export const ROT_STEPS = 64; // 한 바퀴를 64단계(5.6°)로 나눠 미리 만든다
+const SUP = 4;
+const pixCache = new Map();
+const rotCache = new Map();
+
+function pixelsOf(src, flip) {
+  const w = src.width, h = src.height;
+  const cv = makeCanvas(w, h), c = cv.getContext('2d', { willReadFrequently: true });
+  if (flip) { c.translate(w, 0); c.scale(-1, 1); }
+  c.drawImage(src, 0, 0);
+  return { w, h, d: new Uint32Array(c.getImageData(0, 0, w, h).data.buffer.slice(0)) };
+}
+
+// EPX/Scale2x: 대각선 계단을 매끈한 선으로 바꿔 두 배로
+function scale2x({ w, h, d }) {
+  const W = w * 2, o = new Uint32Array(W * h * 2);
+  const at = (x, y) => d[Math.min(h - 1, Math.max(0, y)) * w + Math.min(w - 1, Math.max(0, x))];
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const p = d[y * w + x], A = at(x, y - 1), B = at(x + 1, y), C = at(x - 1, y), D = at(x, y + 1);
+    const i = y * 2 * W + x * 2;
+    o[i] = C === A && C !== D && A !== B ? A : p;
+    o[i + 1] = A === B && A !== C && B !== D ? B : p;
+    o[i + W] = D === C && D !== B && C !== A ? C : p;
+    o[i + W + 1] = B === D && B !== A && D !== C ? D : p;
+  }
+  return { w: W, h: h * 2, d: o };
+}
+
+// step: 0..ROT_STEPS-1. 결과 캔버스의 정중앙이 원래 그림의 정중앙.
+export function catSpriteRot(ti, expr, flip, step) {
+  step = ((step % ROT_STEPS) + ROT_STEPS) % ROT_STEPS;
+  if (step === 0 && !flip) return catSprite(ti, expr);
+  const k = ti + ':' + expr + ':' + (flip ? 1 : 0) + ':' + step;
+  let out = rotCache.get(k);
+  if (out) return out;
+  const src = catSprite(ti, expr);
+  const pk = ti + ':' + expr + ':' + (flip ? 1 : 0);
+  let big = pixCache.get(pk);
+  if (!big) { big = scale2x(scale2x(pixelsOf(src, flip))); pixCache.set(pk, big); }
+  const a = (step / ROT_STEPS) * Math.PI * 2, cos = Math.cos(a), sin = Math.sin(a);
+  const w = src.width, h = src.height;
+  // 회전한 바운딩 박스 (+2 여유). 원본과 홀짝을 맞춰 중심이 반 칸 어긋나지 않게
+  let ow = Math.ceil(Math.abs(w * cos) + Math.abs(h * sin)) + 2, oh = Math.ceil(Math.abs(w * sin) + Math.abs(h * cos)) + 2;
+  if ((ow - w) % 2) ow++;
+  if ((oh - h) % 2) oh++;
+  const cv = makeCanvas(ow, oh), c = cv.getContext('2d');
+  const img = c.createImageData(ow, oh), od = new Uint32Array(img.data.buffer);
+  for (let y = 0; y < oh; y++) for (let x = 0; x < ow; x++) {
+    const dx = x + 0.5 - ow / 2, dy = y + 0.5 - oh / 2;
+    const sx = (dx * cos + dy * sin + w / 2) * SUP, sy = (-dx * sin + dy * cos + h / 2) * SUP;
+    if (sx < 0 || sy < 0 || sx >= big.w || sy >= big.h) continue;
+    od[y * ow + x] = big.d[(sy | 0) * big.w + (sx | 0)];
+  }
+  // 샘플링 틈으로 생긴 1칸 구멍(사방이 막힌 빈칸)은 위쪽 색으로 메운다
+  for (let y = 1; y < oh - 1; y++) for (let x = 1; x < ow - 1; x++) {
+    const i = y * ow + x;
+    if (!od[i] && od[i - 1] && od[i + 1] && od[i - ow] && od[i + ow]) od[i] = od[i - ow];
+  }
+  // 얼굴 지키기: 눈동자는 1칸이라 어떤 회전 샘플링이든 특정 각도에선 사라진다.
+  // 얼굴 상자 안 원본 픽셀을 회전된 자리로 직접 찍는다. 털색 먼저, 눈·입(진한 색)은 나중에 찍어 항상 이기게.
+  const { face: [fx, fy], gap } = DESIGN[CAT_TYPES[ti].key];
+  const sp = pixelsOf(src, flip);
+  const fx0 = fx - gap - 2 + PAD, fx1 = fx + gap + 2 + PAD;
+  const dark = new Set([P.eye, P.line, P.darkL, P.eyeBlue, P.eyeGreen].map(h => { const [r, g, b] = rgb(h); return ((255 << 24) | (b << 16) | (g << 8) | r) >>> 0; }));
+  // 얼굴 상자에서 가장 흔한 밝은 색 = 얼굴 털색
+  const cnt = new Map();
+  for (let y = fy - 2 + PAD; y <= fy + 2 + PAD; y++) for (let X = fx0; X <= fx1; X++) {
+    const col = sp.d[y * w + (flip ? w - 1 - X : X)];
+    if (col && !dark.has(col)) cnt.set(col, (cnt.get(col) || 0) + 1);
+  }
+  const skin = [...cnt].sort((p, q) => q[1] - p[1])[0]?.[0];
+  // 회전 샘플링이 얼굴 상자 안에 만든 진한 픽셀은 털색으로 지운다 (눈이 두 배로 굵어지지 않게)
+  if (skin) for (let y = 0; y < oh; y++) for (let x = 0; x < ow; x++) {
+    const i = y * ow + x;
+    if (!dark.has(od[i])) continue;
+    const dx = x + 0.5 - ow / 2, dy = y + 0.5 - oh / 2;
+    let sx = Math.floor(dx * cos + dy * sin + w / 2), sy = Math.floor(-dx * sin + dy * cos + h / 2);
+    if (flip) sx = w - 1 - sx;
+    if (sy >= fy - 2 + PAD && sy <= fy + 2 + PAD && sx >= fx0 && sx <= fx1) od[i] = skin;
+  }
+  for (const pass of [0, 1]) for (let y = fy - 2 + PAD; y <= fy + 2 + PAD; y++) for (let X = fx0; X <= fx1; X++) {
+    const x = flip ? w - 1 - X : X;
+    const col = sp.d[y * w + x];
+    if (!col || dark.has(col) !== (pass === 1)) continue;
+    const ux = x + 0.5 - w / 2, uy = y + 0.5 - h / 2;
+    const tx = Math.floor(ux * cos - uy * sin + ow / 2), ty = Math.floor(ux * sin + uy * cos + oh / 2);
+    if (tx >= 0 && ty >= 0 && tx < ow && ty < oh && od[ty * ow + tx]) od[ty * ow + tx] = col;
+  }
+  c.putImageData(img, 0, 0);
+  rotCache.set(k, cv);
+  return cv;
+}
+
 export function catSilhouette(ti) {
   const k = ti + ':sil';
   let s = catCache.get(k);
@@ -390,6 +486,15 @@ const GLYPH = {
   'X': ['X.X', 'X.X', '.X.', 'X.X', 'X.X'], '-': ['...', '...', 'XXX', '...', '...'],
   '/': ['..X', '..X', '.X.', 'X..', 'X..'], '+': ['...', '.X.', 'XXX', '.X.', '...'],
   'V': ['X.X', 'X.X', 'X.X', 'X.X', '.X.'],
+  // 나머지 영문 대문자 (빠진 글자는 빈칸으로 나와 'PERFECT'가 깨졌었다)
+  'B': ['XX.', 'X.X', 'XX.', 'X.X', 'XX.'], 'C': ['.XX', 'X..', 'X..', 'X..', '.XX'],
+  'F': ['XXX', 'X..', 'XX.', 'X..', 'X..'], 'G': ['.XX', 'X..', 'X.X', 'X.X', '.XX'],
+  'H': ['X.X', 'X.X', 'XXX', 'X.X', 'X.X'], 'J': ['..X', '..X', '..X', 'X.X', '.X.'],
+  'K': ['X.X', 'X.X', 'XX.', 'X.X', 'X.X'], 'M': ['X...X', 'XX.XX', 'X.X.X', 'X...X', 'X...X'],
+  'O': ['.X.', 'X.X', 'X.X', 'X.X', '.X.'], 'P': ['XX.', 'X.X', 'XX.', 'X..', 'X..'],
+  'Q': ['.X.', 'X.X', 'X.X', 'XX.', '.XX'], 'R': ['XX.', 'X.X', 'XX.', 'X.X', 'X.X'],
+  'S': ['.XX', 'X..', '.X.', '..X', 'XX.'], 'U': ['X.X', 'X.X', 'X.X', 'X.X', 'XXX'],
+  'Z': ['XXX', '..X', '.X.', 'X..', 'XXX'], '?': ['XX.', '..X', '.X.', '...', '.X.'],
 };
 
 const numCache = new Map();

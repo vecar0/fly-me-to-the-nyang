@@ -1,0 +1,17 @@
+{
+  "name": "하늘까지 냥 · Fly Me to the Nyang",
+  "short_name": "하늘까지 냥",
+  "description": "고양이를 쌓아 하늘까지! 픽셀 고양이 쌓기 게임",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#2b2236",
+  "theme_color": "#2b2236",
+  "lang": "ko",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

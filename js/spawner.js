@@ -1,5 +1,5 @@
 // 고양이 뽑기, 크레인 속도, 바람. DOM 없음.
-import { CAT_TYPES, CFG } from './config.js?v=1.3.0';
+import { CAT_TYPES, CFG } from './config.js?v=1.4.0';
 
 export function mulberry32(seed) {
   let a = seed >>> 0;

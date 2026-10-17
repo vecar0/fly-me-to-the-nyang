@@ -1,12 +1,12 @@
 // 루프 연결: 모드(title/play/pause/over/dex), 이벤트 → 연출/사운드/저장.
-import { VIEW_W, VIEW_H, CAT_TYPES, ZONES, CFG } from './config.js?v=1.3.0';
-import { Game, STEP } from './sim.js?v=1.3.0';
-import { dailySeed } from './spawner.js?v=1.3.0';
-import { Renderer } from './render.js?v=1.3.0';
-import { UI, pxText, fontsReady } from './ui.js?v=1.3.0';
-import { Audio } from './audio.js?v=1.3.0';
-import { bindInput } from './input.js?v=1.3.0';
-import { load, save } from './storage.js?v=1.3.0';
+import { VIEW_W, VIEW_H, CAT_TYPES, ZONES, CFG } from './config.js?v=1.4.0';
+import { Game, STEP } from './sim.js?v=1.4.0';
+import { dailySeed } from './spawner.js?v=1.4.0';
+import { Renderer } from './render.js?v=1.4.0';
+import { UI, pxText, fontsReady } from './ui.js?v=1.4.0';
+import { Audio } from './audio.js?v=1.4.0';
+import { bindInput } from './input.js?v=1.4.0';
+import { load, save } from './storage.js?v=1.4.0';
 
 const canvas = document.getElementById('game');
 const screen = canvas.getContext('2d');

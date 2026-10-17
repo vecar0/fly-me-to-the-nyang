@@ -37,4 +37,6 @@ python serve.py
 | `fonts/` | 한글 픽셀 폰트 Galmuri 2.40.3 (SIL OFL 1.1, `fonts/OFL-Galmuri.txt`), 게임용으로 줄인 버전 |
 | `tools/subset_fonts.py` | Galmuri 원본 → `fonts/` 서브셋 (한글 2350자 + 게임에 쓰인 글자) |
 | `tools/bump_version.py` | 배포 버전 올리기 (`?v=` 캐시 무효화) |
+| `tools/make_icons.mjs` | 게임 스프라이트로 `icons/` 앱 아이콘 생성 (playwright 필요) |
+| `icons/`, `manifest.webmanifest` | 파비콘·홈 화면 아이콘·PWA 정보 |
 | `design/plan.md` | 기획서 |
