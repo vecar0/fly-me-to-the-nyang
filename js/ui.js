@@ -1,7 +1,7 @@
 // HUD, 타이틀, 일시정지, 게임오버, 도감. 전부 저해상도 버퍼에 픽셀로 그린다.
-import { VIEW_W, VIEW_H, extraH, CAT_TYPES, ZONES } from './config.js?v=1.5.0';
-import { P, Grid, makeCanvas, catSprite, catSilhouette, numText, getIcons } from './sprites.js?v=1.5.0';
-import { VERSION } from './version.js?v=1.5.0';
+import { VIEW_W, VIEW_H, extraH, CAT_TYPES, ZONES } from './config.js?v=1.5.1';
+import { P, Grid, makeCanvas, catSprite, catSilhouette, numText, getIcons } from './sprites.js?v=1.5.1';
+import { VERSION } from './version.js?v=1.5.1';
 
 // 한글 픽셀 폰트 Galmuri(OFL, fonts/OFL-Galmuri.txt). 정해진 크기(11 Bold=12px, 9=10px)로만 그려야 픽셀이 칸에 딱 맞는다.
 // size 10 이하는 작은 글씨, 그 외는 굵은 글씨. 더 크게는 drawCentered의 정수 배율로 키운다.
@@ -223,15 +223,16 @@ export class UI {
     const nyangS = pxText('냥!', { size: 18, color: P.line, outline: P.line });
     drawCentered(ctx, nyangS, VIEW_W / 2, 40 + bob2 + 4, 4);
     drawCentered(ctx, nyang, VIEW_W / 2, 40 + bob2, 4);
-    drawCentered(ctx, pxText('FLY ME TO THE NYANG', { size: 11, color: P.pink, outline: P.line }), VIEW_W / 2, 101);
+    // 부제: '냥!' 그림자 아래끝(약 100, 흔들림 ±2)에서 10px 정도 띄운다
+    drawCentered(ctx, pxText('FLY ME TO THE NYANG', { size: 11, color: P.pink, outline: P.line }), VIEW_W / 2, 112);
 
     // 최고 기록: 반투명 알약 위에 트로피 + 숫자
     const best = numText((store.best / 100).toFixed(2) + 'm', P.yellow);
     const bw = best.width + 18, bx = Math.round(VIEW_W / 2 - bw / 2);
     ctx.fillStyle = 'rgba(58,40,56,0.55)';
-    ctx.fillRect(bx + 1, 120, bw - 2, 13); ctx.fillRect(bx, 121, bw, 11);
-    ctx.drawImage(this.icons.trophy, bx + 4, 122);
-    ctx.drawImage(best, bx + 13, 123);
+    ctx.fillRect(bx + 1, 134, bw - 2, 13); ctx.fillRect(bx, 135, bw, 11);
+    ctx.drawImage(this.icons.trophy, bx + 4, 136);
+    ctx.drawImage(best, bx + 13, 137);
 
     // 방석은 화면 위에서부터 같은 자리(카메라가 천장에서 멈춤)라 버튼도 고정. 늘어난 높이는 방석 아래 바닥으로 간다
     const by = 196;
