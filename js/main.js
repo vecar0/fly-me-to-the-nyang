@@ -239,7 +239,7 @@ requestAnimationFrame(frame);
 
 // 디버그/테스트용: advance(초)로 탭이 숨겨져 있어도 진행시킬 수 있다
 window.__nyang = {
-  get game() { return game; }, get mode() { return mode; }, renderer, ui, store, CAT_TYPES, startGame, onAction,
+  get game() { return game; }, get mode() { return mode; }, get overT() { return overT; }, renderer, ui, store, audio, CAT_TYPES, startGame, onAction,
   advance(sec) { for (let t = 0; t < sec; t += 1 / 60) tick(1 / 60); },
   tap(x, y) { const id = ui.hit(x, y); if (id) onAction(id); else if (mode === 'play') game.drop(); },
 };

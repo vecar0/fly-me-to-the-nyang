@@ -161,4 +161,93 @@ test('최악 장면: 150마리에서 움직이는 바디 ≤ 40, 물리 스텝 �
   return `고양이 ${g.cats.length}마리, 움직이는 바디 최대 ${maxDyn}, 스텝 평균 ${avg.toFixed(2)}ms / 최대 ${maxMs.toFixed(2)}ms`;
 });
 
+test('[5] 고양이 10종의 충돌 모양이 표의 크기·형태와 같다', () => {
+  const g = new Game({ seed: 1 });
+  const out = [];
+  CAT_TYPES.forEach((t, i) => {
+    g.crane.type = i;
+    g.crane.cooldown = 0;
+    g.drop(90);
+    const c = g.cats[g.cats.length - 1];
+    const b = c.body.bounds;
+    const w = (b.max.x - b.min.x) / 3, h = (b.max.y - b.min.y) / 3;
+    assert(Math.abs(w - t.w) < 1 && Math.abs(h - t.h) < 1, `${t.name} ${w.toFixed(1)}x${h.toFixed(1)} ≠ ${t.w}x${t.h}`);
+    const nv = c.body.vertices.length;
+    if (t.shape === 'circle') assert(nv >= 20, `${t.name} 원이 아님 (꼭짓점 ${nv})`);
+    if (t.shape === 'poly') assert(nv === t.verts.length, `${t.name} 꼭짓점 ${nv}`);
+    out.push(`${t.name} ${w.toFixed(0)}x${h.toFixed(0)}`);
+    globalThis.Matter.Composite.remove(g.engine.world, c.body);
+    g.cats.pop();
+    g.crane.type = 0;
+  });
+  return out.join(', ');
+});
+
+test('[5] 동글냥은 구르고 박스냥은 멈춘다', () => {
+  const roll = key => {
+    const g = new Game({ seed: 2 });
+    g.crane.type = CAT_TYPES.findIndex(t => t.key === key);
+    g.drop(90);
+    for (let s = 0; s < 60; s++) g.update(STEP);
+    const c = g.cats[0];
+    const x0 = c.body.position.x;
+    globalThis.Matter.Sleeping.set(c.body, false);
+    globalThis.Matter.Body.setVelocity(c.body, { x: 1.5, y: 0 });
+    const a0 = c.body.angle;
+    for (let s = 0; s < 40; s++) g.update(STEP);
+    return { dx: (c.body.position.x - x0) / 3, rot: Math.abs(c.body.angle - a0) };
+  };
+  const ball = roll('ball'), box = roll('box');
+  assert(ball.dx > box.dx * 3, `이동 동글냥 ${ball.dx.toFixed(1)}px, 박스냥 ${box.dx.toFixed(1)}px`);
+  assert(ball.rot > 0.4 && box.rot < 0.05, `회전 동글냥 ${ball.rot.toFixed(2)}, 박스냥 ${box.rot.toFixed(2)}rad`);
+  return `같은 힘: 동글냥 ${ball.dx.toFixed(1)}px·${ball.rot.toFixed(2)}rad 굴러감, 박스냥 ${box.dx.toFixed(1)}px·${box.rot.toFixed(2)}rad`;
+});
+
+test('[12] 3m·7m·12m·20m를 넘으면 구간 이벤트가 한 번씩 나온다', () => {
+  const g = new Game({ seed: 3 });
+  const got = [];
+  for (const h of [100, 299, 301, 650, 701, 1199, 1201, 1999, 2001, 2500]) {
+    g.best = h;
+    g.update(STEP);
+    for (const e of g.drainEvents()) if (e.type === 'zone') got.push(`${h}→${e.zone}`);
+  }
+  assert(got.join(',') === '301→1,701→2,1201→3,2001→4', got.join(','));
+  return got.join(', ');
+});
+
+test('[10] 해금은 최고 높이 기준: 높이가 오르면 실제 게임에서도 새 종이 나온다', () => {
+  const g = new Game({ seed: 11 });
+  const seen = new Set();
+  g.best = 1300;
+  for (let i = 0; i < 200; i++) { g._loadCrane(); seen.add(g.crane.type); }
+  const all = CAT_TYPES.map((_, i) => i).every(i => seen.has(i));
+  assert(all, '못 나온 종: ' + CAT_TYPES.filter((_, i) => !seen.has(i)).map(t => t.name).join(','));
+});
+
+test('[15] 크레인은 탑 꼭대기보다 약 110px 위에 있다', () => {
+  const g = new Game({ seed: 77, hearts: 99 });
+  const box = CAT_TYPES.findIndex(t => t.key === 'box');
+  for (let i = 0; i < 10; i++) {
+    while (!g.canDrop()) g.update(STEP);
+    g.crane.type = box;
+    const top = g.cats.reduce((a, c) => (!a || c.body.position.y < a.body.position.y ? c : a), null);
+    g.drop(top ? top.body.position.x / 3 : 90);
+    for (let s = 0; s < 90; s++) g.update(STEP);
+  }
+  for (let s = 0; s < 120; s++) g.update(STEP);
+  const gap = -g.crane.y - g.height;
+  assert(Math.abs(gap - CFG.craneAbove) < 4, `간격 ${gap.toFixed(1)}px (높이 ${g.height.toFixed(0)})`);
+  return `높이 ${g.height.toFixed(0)}px, 크레인 간격 ${gap.toFixed(1)}px`;
+});
+
+test('게임오버 후에는 기록이 더 오르지 않는다', () => {
+  const g = new Game({ seed: 5 });
+  g.best = 200; g.over = true; g.hearts = 0;
+  g.height = 0;
+  const b = g.best;
+  g.cats.length = 0;
+  g.update(STEP);
+  assert(g.best === b, '기록 변함');
+});
+
 export { results };

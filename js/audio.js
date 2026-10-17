@@ -46,8 +46,14 @@ export class Audio {
     if (this.master) this.master.gain.setTargetAtTime(m ? 0 : 0.8, this.ctx.currentTime, 0.02);
   }
 
+  // 낮을 땐 빨리, 높을수록 천천히 오르는 펜타토닉 음정. 30m에서 E6(1.3kHz)로 상한.
+  static meowHz(heightPx) {
+    const i = Math.min(10, Math.floor(Math.sqrt(Math.max(0, heightPx) / 30)));
+    return noteHz(pentaSemi(i) + 4);
+  }
+
   _tone({ freq, freq2, type = 'square', dur = 0.12, vol = 0.15, at = 0, bus, attack = 0.005, bend }) {
-    if (!this.ctx) return;
+    if (!this.ctx || this.muted) return;
     const t0 = this.ctx.currentTime + at;
     const o = this.ctx.createOscillator();
     const g = this.ctx.createGain();
@@ -65,8 +71,7 @@ export class Audio {
   // 착지 "냥": 높이가 높을수록 음정이 올라간다 (펜타토닉)
   meow(heightPx, impact = 0.5) {
     if (!this.ctx) return;
-    const i = Math.min(14, Math.floor(heightPx / 45));
-    const f = noteHz(pentaSemi(i) + 7);
+    const f = Audio.meowHz(heightPx);
     const bend = (p, t0) => {
       p.setValueAtTime(f * 0.85, t0);
       p.exponentialRampToValueAtTime(f * 1.22, t0 + 0.05);

@@ -11,12 +11,12 @@ export function pxText(str, { size = 11, color = P.white, outline = P.line, thre
   let out = textCache.get(key);
   if (out) return out;
   const tmp = makeCanvas(8, 8);
-  let tc = tmp.getContext('2d');
+  let tc = tmp.getContext('2d', { willReadFrequently: true }); // 글자마다 픽셀을 읽는다
   tc.font = `bold ${size}px ${FONT}`;
   const w = Math.ceil(tc.measureText(str).width) + 4;
   const h = size + 6;
   tmp.width = w; tmp.height = h;
-  tc = tmp.getContext('2d');
+  tc = tmp.getContext('2d', { willReadFrequently: true });
   tc.font = `bold ${size}px ${FONT}`;
   tc.textBaseline = 'middle';
   tc.fillStyle = '#000';
