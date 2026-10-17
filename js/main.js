@@ -1,12 +1,12 @@
 // 루프 연결: 모드(title/play/pause/over/dex), 이벤트 → 연출/사운드/저장.
-import { VIEW_W, VIEW_H, CAT_TYPES, ZONES, CFG } from './config.js';
-import { Game, STEP } from './sim.js';
-import { dailySeed } from './spawner.js';
-import { Renderer } from './render.js';
-import { UI, pxText } from './ui.js';
-import { Audio } from './audio.js';
-import { bindInput } from './input.js';
-import { load, save } from './storage.js';
+import { VIEW_W, VIEW_H, CAT_TYPES, ZONES, CFG } from './config.js?v=1.4.0';
+import { Game, STEP } from './sim.js?v=1.4.0';
+import { dailySeed } from './spawner.js?v=1.4.0';
+import { Renderer } from './render.js?v=1.4.0';
+import { UI, pxText, fontsReady } from './ui.js?v=1.4.0';
+import { Audio } from './audio.js?v=1.4.0';
+import { bindInput } from './input.js?v=1.4.0';
+import { load, save } from './storage.js?v=1.4.0';
 
 const canvas = document.getElementById('game');
 const screen = canvas.getContext('2d');
@@ -238,7 +238,8 @@ function tick(dt) {
   screen.drawImage(renderer.buf, 0, 0, canvas.width, canvas.height);
   document.body.style.background = mode === 'dex' ? '#1b1640' : '#2b2236';
 }
-requestAnimationFrame(frame);
+// 픽셀 폰트가 오면 시작 (느린 망에서도 1.5초 넘게 기다리지 않음)
+Promise.race([fontsReady, new Promise(r => setTimeout(r, 1500))]).then(() => requestAnimationFrame(frame));
 
 // 디버그/테스트용: advance(초)로 탭이 숨겨져 있어도 진행시킬 수 있다
 window.__nyang = {

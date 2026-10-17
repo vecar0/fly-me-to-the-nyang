@@ -1,7 +1,7 @@
 // 저해상도 버퍼(180x320)에 월드를 그린다: 배경, 방석, 고양이, 크레인, 파티클, 카메라.
-import { VIEW_W, VIEW_H, CAT_TYPES, CFG } from './config.js';
-import { P, Grid, makeCanvas, catSprite, getIcons, numText } from './sprites.js';
-import { TEXTURES } from './textures.js';
+import { VIEW_W, VIEW_H, CAT_TYPES, CFG } from './config.js?v=1.4.0';
+import { P, Grid, makeCanvas, catSprite, catSpriteRot, ROT_STEPS, getIcons, numText } from './sprites.js?v=1.4.0';
+import { TEXTURES } from './textures.js?v=1.4.0';
 
 const SC = {
   wall: '#f7dcc6', wallL: '#fbe8d8', wallD: '#e9c4ab',
@@ -515,12 +515,15 @@ export class Renderer {
   }
 
   _drawCat(ctx, game, cat, camTop) {
-    const t = CAT_TYPES[cat.type];
     const f = this._fx(cat);
     const p = game.catPos(cat);
     const y = p.y - camTop;
     if (y < -40 || y > VIEW_H + 400) return;
-    const img = catSprite(cat.type, this._expr(game, cat, f));
+    // 미리 돌려 둔 도트 그림(RotSprite)을 쓴다. 캔버스 회전은 얼굴 픽셀을 깨뜨린다.
+    const step = Math.round((p.angle / (Math.PI * 2)) * ROT_STEPS);
+    const img = catSpriteRot(cat.type, this._expr(game, cat, f), cat.flip, step);
+    const cos = Math.cos(p.angle), sin = Math.sin(p.angle);
+    const cx = p.x - (cat.off.x * cos - cat.off.y * sin), cy = y - (cat.off.x * sin + cat.off.y * cos);
     // 착지 찌부러짐: 0.85 → 1.05 → 1.0 (120ms)
     let sy = 1;
     const lt = this.time - f.landT;
@@ -530,13 +533,12 @@ export class Renderer {
       else if (lt < 0.08) sy = 1 - a + (a + 0.05) * ((lt - 0.04) / 0.04);
       else sy = 1.05 - 0.05 * ((lt - 0.08) / 0.04);
     }
+    const x0 = Math.round(cx - img.width / 2), y0 = Math.round(cy - img.height / 2);
+    if (sy === 1) { ctx.drawImage(img, x0, y0); return; }
     ctx.save();
-    ctx.translate(Math.round(p.x), Math.round(y));
-    ctx.rotate(p.angle);
-    ctx.translate(-cat.off.x, -cat.off.y);
-    if (sy !== 1) { ctx.translate(0, t.h / 2); ctx.scale(2 - sy, sy); ctx.translate(0, -t.h / 2); }
-    if (cat.flip) ctx.scale(-1, 1);
-    ctx.drawImage(img, -img.width / 2, -img.height / 2);
+    ctx.translate(x0 + img.width / 2, y0 + img.height);
+    ctx.scale(2 - sy, sy);
+    ctx.drawImage(img, -img.width / 2, -img.height);
     ctx.restore();
   }
 

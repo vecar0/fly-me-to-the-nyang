@@ -34,4 +34,9 @@ python serve.py
 | `js/textures.js` | 배경 타일 (벽지·나무·기와·밧줄), 자동 생성 |
 | `tools/pixelize_textures.py` | `textures/src/` 원본 → 픽셀 타일 변환 (seam 검사 포함) |
 | `vendor/matter.min.js` | Matter.js 0.20.0 (MIT) |
+| `fonts/` | 한글 픽셀 폰트 Galmuri 2.40.3 (SIL OFL 1.1, `fonts/OFL-Galmuri.txt`), 게임용으로 줄인 버전 |
+| `tools/subset_fonts.py` | Galmuri 원본 → `fonts/` 서브셋 (한글 2350자 + 게임에 쓰인 글자) |
+| `tools/bump_version.py` | 배포 버전 올리기 (`?v=` 캐시 무효화) |
+| `tools/make_icons.mjs` | 게임 스프라이트로 `icons/` 앱 아이콘 생성 (playwright 필요) |
+| `icons/`, `manifest.webmanifest` | 파비콘·홈 화면 아이콘·PWA 정보 |
 | `design/plan.md` | 기획서 |

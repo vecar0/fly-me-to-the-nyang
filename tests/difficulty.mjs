@@ -1,8 +1,8 @@
 // 난이도 측정: 사람처럼 꼭대기를 노리고 놓는 자동 플레이어로 여러 판을 돌려 기록 분포를 낸다.
 // 사용: `const { measure } = await import('/tests/difficulty.mjs'); measure({ games: 20, aimNoise: 3 })`
-import { Game, STEP } from '../js/sim.js';
-import { CFG } from '../js/config.js';
-import { mulberry32 } from '../js/spawner.js';
+import { Game, STEP } from '../js/sim.js?v=1.4.0';
+import { CFG } from '../js/config.js?v=1.4.0';
+import { mulberry32 } from '../js/spawner.js?v=1.4.0';
 
 function gauss(rng) {
   const u = Math.max(1e-9, rng()), v = rng();

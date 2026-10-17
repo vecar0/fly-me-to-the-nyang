@@ -1,9 +1,9 @@
 // 실제 게임 페이지(index.html)에서 도는 브라우저 테스트.
 // 진짜 pointerdown/keydown 이벤트를 캔버스·window에 보내고, 화면 버퍼 픽셀까지 확인한다.
 // 사용: 게임 페이지에서 `const { run } = await import('/tests/e2e.mjs'); await run()`
-import { VIEW_W, VIEW_H, CAT_TYPES, CFG } from '../js/config.js';
-import { Audio } from '../js/audio.js';
-import * as storage from '../js/storage.js';
+import { VIEW_W, VIEW_H, CAT_TYPES, CFG } from '../js/config.js?v=1.4.0';
+import { Audio } from '../js/audio.js?v=1.4.0';
+import * as storage from '../js/storage.js?v=1.4.0';
 
 const N = () => window.__nyang;
 const canvas = () => document.getElementById('game');
@@ -278,6 +278,45 @@ export async function run() {
       N().advance(1.5);
       assert(N().mode === 'over', '진행 안 됨');
     } finally { p.getItem = og; p.setItem = os; }
+  });
+
+  await test('[30] 기울어진 고양이: 모든 종·각도에서 픽셀이 빠지지 않고 눈이 남는다', async () => {
+    const s = await import('../js/sprites.js?v=1.4.0');
+    const stat = cv => {
+      const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
+      let n = 0, holes = 0, eye = 0;
+      const on = (x, y) => x >= 0 && y >= 0 && x < cv.width && y < cv.height && d[(y * cv.width + x) * 4 + 3] > 0;
+      for (let y = 0; y < cv.height; y++) for (let x = 0; x < cv.width; x++) {
+        const i = (y * cv.width + x) * 4;
+        if (on(x, y)) { n++; if (d[i] === 0x2a && d[i + 1] === 0x1f && d[i + 2] === 0x2e) eye++; } // P.eye
+        else if (on(x - 1, y) && on(x + 1, y) && on(x, y - 1) && on(x, y + 1)) holes++; // 사방이 막힌 빈칸 = 회전 구멍
+      }
+      return { n, holes, eye };
+    };
+    let worst = 1, worstEye = 9;
+    for (let ti = 0; ti < CAT_TYPES.length; ti++) {
+      const base = stat(s.catSprite(ti, 'calm'));
+      for (let step = 1; step < 64; step++) for (const flip of [false, true]) {
+        const r = stat(s.catSpriteRot(ti, 'calm', flip, step));
+        const ratio = r.n / base.n, eyes = r.eye / base.eye;
+        worst = Math.min(worst, ratio); worstEye = Math.min(worstEye, eyes);
+        assert(ratio > 0.85 && ratio < 1.15, `${CAT_TYPES[ti].name} ${step}단계 픽셀 수 ${(ratio * 100).toFixed(0)}%`);
+        assert(r.holes <= 1, `${CAT_TYPES[ti].name} ${step}단계 구멍 ${r.holes}개`);
+        // 눈동자는 1칸짜리라 그냥 돌리면 어떤 각도에선 0%가 된다 (예전 캔버스 회전 0~200%)
+        assert(eyes >= 0.6 && eyes <= 1, `${CAT_TYPES[ti].name} ${step}단계 눈 픽셀 ${(eyes * 100).toFixed(0)}%`);
+      }
+    }
+    return `64각도 × 좌우 × 10종: 최소 픽셀 보존 ${(worst * 100).toFixed(0)}%, 눈 보존 ${(worstEye * 100).toFixed(0)}% 이상`;
+  });
+
+  await test('[31] 숫자·영문 도트 글자: 게임에 쓰는 글자가 모두 정의돼 있다', async () => {
+    const s = await import('../js/sprites.js?v=1.4.0');
+    const blank = s.numText(' ');
+    for (const ch of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.!?/+-:m') {
+      const c = s.numText(ch).getContext('2d'), d = c.getImageData(0, 0, c.canvas.width, c.canvas.height).data;
+      let ink = 0; for (let i = 3; i < d.length; i += 4) ink += d[i] > 0;
+      assert(ink > 0 && (c.canvas.width !== blank.width || ink > 0), `'${ch}' 글자 없음`);
+    }
   });
 
   home();
