@@ -1,6 +1,7 @@
 // 저해상도 버퍼(180x320)에 월드를 그린다: 배경, 방석, 고양이, 크레인, 파티클, 카메라.
 import { VIEW_W, VIEW_H, CAT_TYPES, CFG } from './config.js';
 import { P, Grid, makeCanvas, catSprite, getIcons, numText } from './sprites.js';
+import { TEXTURES } from './textures.js';
 
 const SC = {
   wall: '#f7dcc6', wallL: '#fbe8d8', wallD: '#e9c4ab',
@@ -13,7 +14,8 @@ const SC = {
 
 // 높이(px) → 하늘색. 8px 띠로 끊어서 픽셀 느낌을 낸다.
 const SKY = [
-  [0, '#bfe6ff'], [300, '#ffb38a'], [450, '#ffcf9e'], [650, '#bfe3ff'], [900, '#9fd3ff'],
+  // 노을: 레퍼런스 컨셉처럼 주황 → 분홍 → 보라 → 하늘색
+  [0, '#bfe6ff'], [300, '#ffc08a'], [400, '#ffa79e'], [520, '#d59bd0'], [640, '#a9b8ef'], [900, '#9fd3ff'],
   [1150, '#7fb6f5'], [1300, '#4a4fa3'], [1600, '#2a2466'], [2000, '#171238'], [3000, '#100c28'],
 ];
 function lerpHex(a, b, t) {
@@ -45,26 +47,34 @@ function hash(n) {
 
 // ---------- 배경 미리 그리기 ----------
 
-const ROOM_TOP = -318, ROOM_BOT = 240;
+// Higgsfield로 만든 seamless 텍스처를 픽셀화한 타일 (tools/pixelize_textures.py → js/textures.js)
+// 벽지 꽃이 고양이와 시선을 다투지 않게 대비를 낮춘 색 (배경은 유닛보다 한 톤 조용하게)
+const SOFT = {
+  wallpaper: { '#f7a8b8': '#f9cdd0', '#f48fa6': '#f6b9c2', '#86c97a': '#cfe2b6', '#5a9a5f': '#b5d0a0', '#e9c4ab': '#f2d3bf' },
+};
+function tex(name, x, y) {
+  const t = TEXTURES[name];
+  const ty = ((y % t.h) + t.h) % t.h, tx = ((x % t.w) + t.w) % t.w;
+  const c = t.colors[t.rows[ty].charCodeAt(tx) - 97];
+  return SOFT[name]?.[c] ?? c;
+}
+
+const ROOM_TOP = -340, ROOM_BOT = 240; // 천장 위 40px는 기와 지붕
 
 function buildRoom() {
   const H = ROOM_BOT - ROOM_TOP;
   const g = new Grid(VIEW_W, H);
   const Y = wy => wy - ROOM_TOP;
-  // 벽지
-  for (let wy = -300; wy < 212; wy++) for (let x = 0; x < VIEW_W; x++) {
-    let c = SC.wall;
-    if (x % 16 < 2) c = SC.wallL;
-    if (x % 16 === 8 && ((wy % 16) + 16) % 16 === 8) c = P.pink;
-    if (wy > 150) c = (x % 12 === 0) ? SC.woodS : (wy < 153 ? SC.woodL : SC.wood);
-    g.set(x, Y(wy), c);
-  }
+  // 벽지 (꽃무늬 타일) + 아래쪽 판자벽 (세로 나무 타일)
+  for (let wy = -300; wy < 212; wy++) for (let x = 0; x < VIEW_W; x++)
+    g.set(x, Y(wy), wy > 150 ? tex('wood', x, wy) : tex('wallpaper', x, wy));
   g.rect(0, Y(150), VIEW_W, 1, SC.woodS);
+  g.rect(0, Y(151), VIEW_W, 2, SC.woodL);
   g.rect(0, Y(212), VIEW_W, 8, SC.woodS);
   g.rect(0, Y(212), VIEW_W, 1, SC.woodL);
-  // 바닥
+  // 바닥 (나무 타일을 눕혀서 가로 마루)
   for (let wy = 220; wy < ROOM_BOT; wy++) for (let x = 0; x < VIEW_W; x++)
-    g.set(x, Y(wy), (x + (wy > 230 ? 20 : 0)) % 40 === 0 ? SC.woodS : (wy === 220 ? SC.woodL : SC.wood));
+    g.set(x, Y(wy), wy === 220 ? SC.woodL : tex('wood', wy * 2, x));
 
   // 창문
   const wx0 = 16, wx1 = 60, wy0 = -205, wy1 = -130;
@@ -115,22 +125,16 @@ function buildRoom() {
   // 천장 + 지붕 단면
   g.rect(0, Y(-300), VIEW_W, 6, SC.woodS);
   g.rect(0, Y(-300), VIEW_W, 1, SC.woodL);
+  // 기와 (비늘 기와 타일), 맨 윗줄은 외곽선
   for (let wy = ROOM_TOP; wy < -300; wy++) for (let x = 0; x < VIEW_W; x++) {
     const ly = wy - ROOM_TOP;
-    const row = Math.floor(ly / 6);
-    const lx = (x + (row % 2) * 5) % 10;
-    let c = SC.roof;
-    if (ly % 6 === 5 || lx === 0) c = SC.roofS;
-    else if (ly % 6 === 0) c = SC.roofL;
-    if (ly === 0) c = P.line;
-    g.set(x, Y(wy), c);
+    g.set(x, Y(wy), ly === 0 ? P.line : ly === 1 ? SC.roofL : tex('roof', x, wy));
   }
 
   // 캣타워 기둥 + 받침
   for (let wy = 10; wy < 214; wy++) for (let x = 83; x < 97; x++) {
-    let c = wy % 3 === 0 ? P.creamS : P.cream;
+    let c = tex('sisal', x, wy); // 밧줄 타일
     if (x === 83 || x === 96) c = P.line;
-    else if (x === 84) c = P.creamL;
     else if (x === 95) c = P.creamS;
     g.set(x, Y(wy), c);
   }
@@ -165,7 +169,7 @@ function buildTown() {
   // 노을 해
   for (let y = -26; y <= 26; y++) for (let x = -26; x <= 26; x++) {
     const d = Math.hypot(x, y);
-    if (d < 24) g.set(132 + x, Y(-352 + y), d > 21 ? '#ffc879' : SC.sun);
+    if (d < 24) g.set(132 + x, Y(-374 + y), d > 21 ? '#ffc879' : SC.sun);
   }
   // 집들 실루엣
   const houses = [[0, 22, 26], [20, 30, 36], [46, 18, 22], [62, 34, 30], [94, 22, 40], [114, 30, 26], [142, 20, 34], [160, 24, 28]];

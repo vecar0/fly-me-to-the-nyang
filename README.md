@@ -30,5 +30,7 @@ python serve.py
 | `js/render.js` | 배경, 카메라, 파티클 |
 | `js/ui.js` | HUD, 타이틀, 게임오버, 도감 |
 | `js/audio.js` | WebAudio 효과음과 BGM |
+| `js/textures.js` | 배경 타일 (벽지·나무·기와·밧줄), 자동 생성 |
+| `tools/pixelize_textures.py` | `textures/src/` 원본 → 픽셀 타일 변환 (seam 검사 포함) |
 | `vendor/matter.min.js` | Matter.js 0.20.0 (MIT) |
 | `design/plan.md` | 기획서 |
