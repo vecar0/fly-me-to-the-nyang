@@ -1,7 +1,7 @@
 // HUD, 타이틀, 일시정지, 게임오버, 도감. 전부 저해상도 버퍼에 픽셀로 그린다.
-import { VIEW_W, VIEW_H, CAT_TYPES, ZONES } from './config.js?v=1.4.0';
-import { P, Grid, makeCanvas, catSprite, catSilhouette, numText, getIcons } from './sprites.js?v=1.4.0';
-import { VERSION } from './version.js?v=1.4.0';
+import { VIEW_W, VIEW_H, extraH, CAT_TYPES, ZONES } from './config.js?v=1.5.0';
+import { P, Grid, makeCanvas, catSprite, catSilhouette, numText, getIcons } from './sprites.js?v=1.5.0';
+import { VERSION } from './version.js?v=1.5.0';
 
 // 한글 픽셀 폰트 Galmuri(OFL, fonts/OFL-Galmuri.txt). 정해진 크기(11 Bold=12px, 9=10px)로만 그려야 픽셀이 칸에 딱 맞는다.
 // size 10 이하는 작은 글씨, 그 외는 굵은 글씨. 더 크게는 drawCentered의 정수 배율로 키운다.
@@ -233,9 +233,11 @@ export class UI {
     ctx.drawImage(this.icons.trophy, bx + 4, 122);
     ctx.drawImage(best, bx + 13, 123);
 
-    this.button(ctx, 'start', 40, 196, 100, 24, '시작', 'pink');
-    this.button(ctx, 'daily', 40, 226, 100, 20, '데일리', 'yellow');
-    this.button(ctx, 'dex', 40, 252, 100, 20, '도감', 'blue');
+    // 방석은 화면 위에서부터 같은 자리(카메라가 천장에서 멈춤)라 버튼도 고정. 늘어난 높이는 방석 아래 바닥으로 간다
+    const by = 196;
+    this.button(ctx, 'start', 40, by, 100, 24, '시작', 'pink');
+    this.button(ctx, 'daily', 40, by + 30, 100, 20, '데일리', 'yellow');
+    this.button(ctx, 'dex', 40, by + 56, 100, 20, '도감', 'blue');
     // 맨 아래 띠: 조작 안내 (방석·데모 고양이와 안 겹치게 어두운 띠 위에)
     ctx.fillStyle = 'rgba(27,22,64,0.6)';
     ctx.fillRect(0, VIEW_H - 18, VIEW_W, 18);
@@ -246,9 +248,10 @@ export class UI {
 
   pause(ctx) {
     this.dim(ctx, 0.55);
-    drawCentered(ctx, pxText('일시정지', { size: 14, color: P.white }), VIEW_W / 2, 110, 2);
-    this.button(ctx, 'resume', 40, 170, 100, 24, '계속하기', 'pink');
-    this.button(ctx, 'home', 40, 202, 100, 20, '처음으로', 'gray');
+    const oy = Math.round(extraH() / 2);
+    drawCentered(ctx, pxText('일시정지', { size: 14, color: P.white }), VIEW_W / 2, 110 + oy, 2);
+    this.button(ctx, 'resume', 40, 170 + oy, 100, 24, '계속하기', 'pink');
+    this.button(ctx, 'home', 40, 202 + oy, 100, 20, '처음으로', 'gray');
   }
 
   over(ctx, game, info, t) {
@@ -296,7 +299,7 @@ export class UI {
       drawCentered(ctx, name, cx + cw / 2, cy + ch - 15);
     });
 
-    const zy = 186;
+    const zy = 186 + Math.round(extraH() * 0.5);
     drawCentered(ctx, pxText('구간', { size: 11, color: P.yellow }), VIEW_W / 2, zy);
     ZONES.forEach((z, i) => {
       const seen = store.zones.includes(i);
@@ -308,6 +311,6 @@ export class UI {
       drawCentered(ctx, numText(z.from / 100 + 'm', seen ? P.yellow : P.darkL, null), x + 16, y + 20);
     });
 
-    this.button(ctx, 'close', 40, 280, 100, 22, '닫기', 'pink');
+    this.button(ctx, 'close', 40, VIEW_H - 40, 100, 22, '닫기', 'pink');
   }
 }

@@ -1,8 +1,8 @@
 // headless 시뮬레이션 테스트. DOM을 쓰지 않는 sim.js/spawner.js만 사용한다.
 // 브라우저(tests/index.html)에서도, Matter를 globalThis에 올린 Node에서도 돈다.
-import { Game, STEP } from '../js/sim.js?v=1.4.0';
-import { CAT_TYPES, CFG } from '../js/config.js?v=1.4.0';
-import { mulberry32, pickType, craneSpeed, createWind, updateWind, dailySeed } from '../js/spawner.js?v=1.4.0';
+import { Game, STEP } from '../js/sim.js?v=1.5.0';
+import { CAT_TYPES, CFG } from '../js/config.js?v=1.5.0';
+import { mulberry32, pickType, craneSpeed, createWind, updateWind, dailySeed } from '../js/spawner.js?v=1.5.0';
 import { playOne } from './difficulty.mjs';
 
 const results = [];

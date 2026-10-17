@@ -1,7 +1,12 @@
 // 모든 숫자는 여기서 조정한다. 단위: 내부 픽셀(1px = 1cm), 초.
 
 export const VIEW_W = 180;
-export const VIEW_H = 320;
+// 세로 칸 수는 기기 비율에 맞춰 바뀐다 (세로로 긴 폰에서 위아래 빈 띠 없이). 가로는 게임 밸런스 때문에 고정.
+export const VIEW_H_MIN = 320, VIEW_H_MAX = 440;
+export let VIEW_H = VIEW_H_MIN;
+export function setViewH(h) { VIEW_H = Math.max(VIEW_H_MIN, Math.min(VIEW_H_MAX, Math.round(h))); return VIEW_H; }
+// 기본(320)보다 늘어난 칸 수. 화면 배치를 아래로 밀 때 쓴다.
+export const extraH = () => VIEW_H - VIEW_H_MIN;
 export const S = 3; // 물리 단위 / 픽셀 (Matter.js는 작은 물체에서 불안정해서 3배로 키워 계산)
 
 // shape: rect(w,h,r=모서리) | circle(w=지름) | poly(verts, 바운딩박스 기준 좌표)

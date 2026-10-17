@@ -1,12 +1,12 @@
 // 루프 연결: 모드(title/play/pause/over/dex), 이벤트 → 연출/사운드/저장.
-import { VIEW_W, VIEW_H, CAT_TYPES, ZONES, CFG } from './config.js?v=1.4.0';
-import { Game, STEP } from './sim.js?v=1.4.0';
-import { dailySeed } from './spawner.js?v=1.4.0';
-import { Renderer } from './render.js?v=1.4.0';
-import { UI, pxText, fontsReady } from './ui.js?v=1.4.0';
-import { Audio } from './audio.js?v=1.4.0';
-import { bindInput } from './input.js?v=1.4.0';
-import { load, save } from './storage.js?v=1.4.0';
+import { VIEW_W, VIEW_H, VIEW_H_MIN, setViewH, CAT_TYPES, ZONES, CFG } from './config.js?v=1.5.0';
+import { Game, STEP } from './sim.js?v=1.5.0';
+import { dailySeed } from './spawner.js?v=1.5.0';
+import { Renderer } from './render.js?v=1.5.0';
+import { UI, pxText, fontsReady } from './ui.js?v=1.5.0';
+import { Audio } from './audio.js?v=1.5.0';
+import { bindInput } from './input.js?v=1.5.0';
+import { load, save } from './storage.js?v=1.5.0';
 
 const canvas = document.getElementById('game');
 const screen = canvas.getContext('2d');
@@ -180,13 +180,25 @@ bindInput(canvas, {
 });
 
 // ---- 화면 크기: 정수 배율 ----
+// 고해상도 폰(dpr 2 이상)은 가로를 꽉 채운다. 소수 배율이라도 한 칸이 기기 픽셀 6~7개라 고르지 않은 게 안 보인다.
+// PC 등 dpr 1~2는 기존처럼 정수 배율. 남는 세로는 VIEW_H를 늘려서 채운다.
 function resize() {
   const dpr = window.devicePixelRatio || 1;
-  const k = Math.max(1, Math.floor(Math.min((window.innerWidth * dpr) / VIEW_W, (window.innerHeight * dpr) / VIEW_H)));
-  canvas.width = VIEW_W * k;
-  canvas.height = VIEW_H * k;
-  canvas.style.width = (VIEW_W * k) / dpr + 'px';
-  canvas.style.height = (VIEW_H * k) / dpr + 'px';
+  const W = window.innerWidth * dpr, H = window.innerHeight * dpr;
+  let s;
+  if (dpr >= 2) {
+    s = W / VIEW_W;
+    if (H / s < VIEW_H_MIN) s = H / VIEW_H_MIN; // 가로로 넓은 화면: 높이에 맞추고 좌우 띠
+  } else {
+    s = Math.max(1, Math.floor(Math.min(W / VIEW_W, H / VIEW_H_MIN)));
+  }
+  const prevH = VIEW_H;
+  setViewH(Math.floor(H / s));
+  if (VIEW_H !== prevH) renderer.resize();
+  canvas.width = Math.floor(VIEW_W * s); // 내림: 반올림하면 화면보다 0.x px 넓어져 가로 스크롤이 생긴다
+  canvas.height = Math.floor(VIEW_H * s);
+  canvas.style.width = canvas.width / dpr + 'px';
+  canvas.style.height = canvas.height / dpr + 'px';
   screen.imageSmoothingEnabled = false;
 }
 window.addEventListener('resize', resize);
