@@ -1,6 +1,7 @@
 // HUD, 타이틀, 일시정지, 게임오버, 도감. 전부 저해상도 버퍼에 픽셀로 그린다.
-import { VIEW_W, VIEW_H, CAT_TYPES, ZONES } from './config.js';
-import { P, Grid, makeCanvas, catSprite, catSilhouette, numText, getIcons } from './sprites.js';
+import { VIEW_W, VIEW_H, CAT_TYPES, ZONES } from './config.js?v=1.2.0';
+import { P, Grid, makeCanvas, catSprite, catSilhouette, numText, getIcons } from './sprites.js?v=1.2.0';
+import { VERSION } from './version.js?v=1.2.0';
 
 const FONT = '"Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif';
 
@@ -201,6 +202,8 @@ export class UI {
     this.button(ctx, 'daily', 40, 226, 100, 20, '데일리', 'yellow');
     this.button(ctx, 'dex', 40, 252, 100, 20, '도감', 'blue');
     drawCentered(ctx, pxText('탭 · 스페이스로 고양이 놓기', { size: 10, color: P.white }), VIEW_W / 2, 292);
+    const v = numText('V' + VERSION, P.grayL, P.line);
+    ctx.drawImage(v, VIEW_W - v.width - 2, VIEW_H - v.height - 1);
   }
 
   pause(ctx) {

@@ -1,9 +1,9 @@
 // 실제 게임 페이지(index.html)에서 도는 브라우저 테스트.
 // 진짜 pointerdown/keydown 이벤트를 캔버스·window에 보내고, 화면 버퍼 픽셀까지 확인한다.
 // 사용: 게임 페이지에서 `const { run } = await import('/tests/e2e.mjs'); await run()`
-import { VIEW_W, VIEW_H, CAT_TYPES, CFG } from '../js/config.js';
-import { Audio } from '../js/audio.js';
-import * as storage from '../js/storage.js';
+import { VIEW_W, VIEW_H, CAT_TYPES, CFG } from '../js/config.js?v=1.2.0';
+import { Audio } from '../js/audio.js?v=1.2.0';
+import * as storage from '../js/storage.js?v=1.2.0';
 
 const N = () => window.__nyang;
 const canvas = () => document.getElementById('game');
