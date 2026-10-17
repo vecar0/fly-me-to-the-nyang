@@ -1,5 +1,5 @@
 // 팔레트 + 픽셀 스프라이트 생성. 모든 그림은 이 팔레트 색으로만 칠한다.
-import { CAT_TYPES } from './config.js';
+import { CAT_TYPES } from './config.js?v=1.2.0';
 
 export const P = {
   line: '#3a2838', eye: '#2a1f2e', white: '#fffaf2', paper: '#f3ece4',
@@ -95,17 +95,17 @@ const FUR = {
 
 // face: 두 눈 사이 중심, gap: 중심에서 눈까지 거리. 얼굴은 왼쪽(뒤집으면 오른쪽).
 const DESIGN = {
-  loaf:    { fur: 'orange', pattern: 'stripes', face: [6, 6], gap: 3, ears: [[3, 2], [9, 2]],
+  loaf:    { fur: 'orange', pattern: 'stripes', face: [6, 6], gap: 3, ears: [[3, 2], [9, 2]], paws: [2, 8], chest: true,
              tail: [[27, 10], [28, 9], [29, 8], [30, 7], [30, 6], [29, 5]] },
   box:     { fur: 'gray', pattern: 'box', face: [10, 4], gap: 3, ears: [[5, 2], [15, 2]] },
-  kitten:  { fur: 'white', pattern: 'kitten', face: [6, 4], gap: 2, ears: [[2, 1], [9, 1]],
+  kitten:  { fur: 'white', pattern: 'kitten', face: [6, 4], gap: 2, ears: [[2, 1], [9, 1]], paws: [2, 7],
              tail: [[11, 6], [12, 5], [13, 4], [13, 3]] },
   sit:     { fur: 'dark', pattern: 'sit', face: [9, 6], gap: 2, ears: [[7, 1], [11, 1]], eye: 'eyeGreen', mouth: 'darkL',
              tail: [[16, 21], [18, 20], [19, 19], [20, 17], [20, 15], [19, 13], [18, 12]] },
   ball:    { fur: 'cream', pattern: 'ball', face: [6, 9], gap: 2, ears: [[4, 3], [9, 2]] },
-  stretch: { fur: 'gray', pattern: 'stripes', face: [5, 3], gap: 2, ears: [[3, 1], [8, 1]],
+  stretch: { fur: 'gray', pattern: 'stripes', face: [5, 3], gap: 2, ears: [[3, 1], [8, 1]], paws: [1, 30], chest: true,
              tail: [[39, 4], [40, 3], [41, 2], [42, 2], [43, 3]] },
-  chonk:   { fur: 'white', pattern: 'calico', face: [8, 8], gap: 3, ears: [[4, 2], [12, 2]],
+  chonk:   { fur: 'white', pattern: 'calico', face: [8, 8], gap: 3, ears: [[4, 2], [12, 2]], paws: [3, 10, 22],
              tail: [[31, 15], [32, 14], [33, 12], [34, 10], [34, 8], [33, 7]] },
   flat:    { fur: 'cream', pattern: 'siamese', face: [5, 2], gap: 2, ears: [[3, 1], [7, 1]], eye: 'eyeBlue',
              tail: [[35, 4], [36, 3], [37, 3], [38, 4], [39, 5]] },
@@ -136,12 +136,16 @@ function buildCat(ti, expr) {
     if (t.key === 'box' && y < 8) inside = inShape({ shape: 'rect', w: 16, h: 14, r: 4 }, x - 2 + 0.5, y + 0.5);
     if (inside) put(x, y, fb);
   }
-  // 음영: 각 열의 아래 2칸은 어둡게, 위/왼쪽 가장자리는 밝게
+  // 음영: 아래 2칸은 그림자, 그 위 1칸은 바둑판 디더로 부드럽게 / 위·왼쪽 가장자리는 빛, 그 안쪽 1칸은 디더 하이라이트
   for (let y = 0; y < t.h; y++) for (let x = 0; x < t.w; x++) {
     const X = x + PAD, Y = y + PAD;
     if (!M(X, Y)) continue;
+    const chk = (x + y) % 2 === 0;
     if (!M(X, Y + 1) || !M(X, Y + 2)) g.set(X, Y, fs);
+    else if (!M(X, Y + 3) && chk) g.set(X, Y, fs);
     else if (!M(X, Y - 1) || !M(X - 1, Y)) g.set(X, Y, fl);
+    else if ((!M(X, Y - 2) || !M(X - 2, Y)) && chk && fl !== fb) g.set(X, Y, fl);
+    else if (hash2(x, y, ti) < 0.05 && M(X + 1, Y) && M(X, Y + 3)) g.set(X, Y, hash2(y, x, ti) < 0.5 ? fs : fl); // 털 질감 점
   }
 
   const [fx, fy] = d.face;
@@ -176,6 +180,8 @@ function buildCat(ti, expr) {
       else if (y >= t.h - 2 || x === 0 || x === t.w - 1) c = P.boxS;
       else if (x === 10 && y > 11) c = P.boxS;
       else if (y === 12 && x > 3 && x < 8) c = P.boxL;
+      else if (y === 15 && x > 13 && x < 17) c = P.line; // 손잡이 구멍
+      else if (y === 16 && x > 13 && x < 17) c = P.boxS;
       paint(x, y, c);
     }
     for (const x of [5, 6, 13, 14]) paint(x, 8, P.grayL);
@@ -199,6 +205,16 @@ function buildCat(ti, expr) {
     for (const [x, y] of [[2, 19], [3, 20], [1, 18]]) paint(x, y, P.grayL);
   } else if (d.pattern === 'ears') {
     for (let y = 14; y < t.h; y++) for (let x = 4; x < 14; x++) if ((x - 9) ** 2 / 25 + (y - 19) ** 2 / 16 < 1) paint(x, y, P.creamL);
+  }
+
+  // 가슴털: 얼굴 아래 밝은 털
+  if (d.chest) for (let y = fy + 3; y < t.h - 1; y++) for (let x = fx - 3; x <= fx + 3; x++)
+    if ((x - fx) ** 2 / 7 + (y - fy - 5) ** 2 / 5 < 1) paint(x, y, (x + y) % 2 && y === fy + 3 ? fb : fl);
+  // 앞발: 바닥줄에 밝은 발 3칸 + 발가락 사이 선
+  if (d.paws) for (const px of d.paws) {
+    const pc = d.fur === 'white' ? P.paper : fl, toe = fs;
+    paint(px, t.h - 2, pc); paint(px + 1, t.h - 2, pc); paint(px + 2, t.h - 2, pc);
+    paint(px, t.h - 1, pc); paint(px + 1, t.h - 1, toe); paint(px + 2, t.h - 1, pc);
   }
 
   // 귀
@@ -233,7 +249,13 @@ function buildCat(ti, expr) {
     if (M(X, Y)) continue;
     if (M(X - 1, Y) || M(X + 1, Y) || M(X, Y - 1) || M(X, Y + 1)) outline.push([X, Y]);
   }
-  for (const [X, Y] of outline) g.set(X, Y, P.line);
+  // 선택적 외곽선(selout): 빛 받는 위·왼쪽은 옆 털색을 어둡게, 그늘진 아래·오른쪽은 진한 선
+  for (const [X, Y] of outline) {
+    const lit = M(X + 1, Y) || M(X, Y + 1);
+    const shadow = M(X - 1, Y) || M(X, Y - 1);
+    const nb = M(X + 1, Y) ? g.get(X + 1, Y) : M(X, Y + 1) ? g.get(X, Y + 1) : null;
+    g.set(X, Y, lit && !shadow && nb ? deepen(nb) : P.line);
+  }
 
   // 얼굴
   const eye = P[d.eye || 'eye'];
@@ -241,14 +263,17 @@ function buildCat(ti, expr) {
   const gp = d.gap;
   const L = fx - gp, R = fx + gp;
   const f = (x, y, c) => { const X = x + PAD, Y = y + PAD; if (M(X, Y)) g.set(X, Y, c); };
+  // 눈 두 칸: 왼눈 [L-1, L], 오른눈 [R, R+1] (얼굴 중심 기준 대칭)
+  const eyes = [[L - 1, L], [R, R + 1]];
   if (expr === 'calm') {
-    for (const x of [L, R]) { f(x, fy, eye); f(x, fy + 1, eye); }
-    if (d.eye) { f(L, fy, P.eye); f(R, fy, P.eye); }
+    for (const [a, b] of eyes) {
+      f(a, fy, P.white); f(b, fy, eye); f(a, fy + 1, eye); f(b, fy + 1, d.eye ? P.eye : eye); // 반짝임 + 동공
+    }
   } else if (expr === 'blink' || expr === 'yawn') {
-    for (const x of [L, R]) { f(x - 1, fy + 1, ink); f(x, fy + 1, ink); }
+    for (const [a, b] of eyes) { f(a, fy + 1, ink); f(b, fy + 1, ink); }
   } else if (expr === 'surprise') {
-    for (const x of [L, R]) { f(x - 1, fy, eye); f(x, fy, eye); f(x - 1, fy + 1, eye); f(x, fy + 1, eye); f(x - 1, fy, P.white); }
-    f(R + 3, fy - 1, P.eyeBlue); f(R + 3, fy, P.eyeBlue); f(R + 2, fy, P.eyeBlue);
+    for (const [a, b] of eyes) { f(a, fy - 1, eye); f(b, fy - 1, eye); f(a, fy, P.white); f(b, fy, eye); f(a, fy + 1, eye); f(b, fy + 1, eye); }
+    f(R + 4, fy - 2, P.eyeBlue); f(R + 4, fy - 1, P.eyeBlue); f(R + 3, fy - 1, P.eyeBlue); f(R + 4, fy, P.glass);
   } else if (expr === 'fall') {
     f(L - 1, fy - 1, ink); f(L, fy, ink); f(L - 1, fy + 1, ink);
     f(R + 1, fy - 1, ink); f(R, fy, ink); f(R + 1, fy + 1, ink);
@@ -263,7 +288,36 @@ function buildCat(ti, expr) {
     f(fx, fy + 1, P.pink);
     f(fx - 1, fy + 2, ink); f(fx + 1, fy + 2, ink);
   }
+  // 수염: 볼에서 바깥으로 나가다가 몸 밖(빈칸)에 닿으면 2칸씩, 위아래로 살짝 벌어지게
+  for (const side of [-1, 1]) {
+    let x = side < 0 ? L - 2 : R + 2;
+    let steps = 0;
+    while (steps++ < 6 && g.get(x + PAD, fy + 2 + PAD)) x += side;
+    if (steps > 6) continue;
+    for (const [dx, dy] of [[0, 1], [side, 1], [0, 3], [side, 3]]) {
+      const X = x + dx + PAD, Y = fy + dy + PAD;
+      if (g.in(X, Y) && !g.get(X, Y)) g.set(X, Y, WHISKER);
+    }
+  }
   return { canvas: g.toCanvas(), mask, W, H };
+}
+
+const WHISKER = '#9b8a9a';
+function hash2(x, y, k) {
+  let n = Math.imul(x * 374761393 + y * 668265263 + k * 2246822519, 3266489917);
+  n = (n ^ (n >>> 15)) >>> 0;
+  return n / 4294967296;
+}
+// 외곽선용으로 털색을 어둡게: 원색 55% + 진한 보라 45%
+const deepCache = new Map();
+function deepen(hex) {
+  let c = deepCache.get(hex);
+  if (c) return c;
+  const a = parseInt(hex.slice(1), 16), b = parseInt(P.line.slice(1), 16);
+  const ch = sh => Math.round(((a >> sh) & 255) * 0.55 * 0.9 + ((b >> sh) & 255) * 0.45);
+  c = '#' + ((1 << 24) | (ch(16) << 16) | (ch(8) << 8) | ch(0)).toString(16).slice(1);
+  deepCache.set(hex, c);
+  return c;
 }
 
 const catCache = new Map();
@@ -335,6 +389,7 @@ const GLYPH = {
   'Y': ['X.X', 'X.X', '.X.', '.X.', '.X.'], 'T': ['XXX', '.X.', '.X.', '.X.', '.X.'],
   'X': ['X.X', 'X.X', '.X.', 'X.X', 'X.X'], '-': ['...', '...', 'XXX', '...', '...'],
   '/': ['..X', '..X', '.X.', 'X..', 'X..'], '+': ['...', '.X.', 'XXX', '.X.', '...'],
+  'V': ['X.X', 'X.X', 'X.X', 'X.X', '.X.'],
 };
 
 const numCache = new Map();
