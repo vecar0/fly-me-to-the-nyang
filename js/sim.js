@@ -28,11 +28,13 @@ export class Game {
     this.events = [];
     this.time = 0;
     this.hearts = hearts;
+    this.maxHearts = hearts;
     this.height = 0;
     this.landedTop = 0;
     this.best = 0;
     this.count = 0;
     this.perfects = 0;
+    this.lastHeartLoss = -99;
     this.over = false;
     this.zone = 0;
     this.nextId = 1;
@@ -94,7 +96,7 @@ export class Game {
 
   _makeBody(t, x, y) {
     const { Bodies, Body } = globalThis.Matter;
-    const o = { friction: t.friction, frictionStatic: 1.2, restitution: t.bounce ?? 0.02, frictionAir: 0.004, label: 'cat' };
+    const o = { friction: Math.min(1, t.friction + 0.15), frictionStatic: CFG.catFrictionStatic, restitution: t.bounce ?? 0, frictionAir: CFG.catFrictionAir, label: 'cat' };
     let body;
     // 둥근 모서리를 그림만큼 크게 주면 착지 후 2초 가까이 흔들려서 물리는 최대 2px만 깎는다
     if (t.shape === 'rect') body = Bodies.rectangle(x * S, y * S, t.w * S, t.h * S, { ...o, chamfer: { radius: Math.min(t.r, 2) * S } });
@@ -103,6 +105,8 @@ export class Game {
       body = Bodies.fromVertices(x * S, y * S, [t.verts.map(([vx, vy]) => ({ x: vx * S, y: vy * S }))], o);
     }
     Body.setMass(body, t.mass * 10);
+    // 넘어짐 방지용. 원(동글냥·우주냥)은 넘어질 일이 없고 굴러야 하니 제외
+    if (t.shape !== 'circle') Body.setInertia(body, body.inertia * CFG.inertiaScale);
     return body;
   }
 
@@ -115,6 +119,10 @@ export class Game {
         cat.landT = this.time;
         cat.support = b;
         this.events.push({ type: 'land', cat, speed: a.speed / S });
+        // 말랑한 착지: 첫 접촉에서 속도와 회전을 흡수해 튕겨 나가지 않게
+        const { Body } = globalThis.Matter;
+        Body.setVelocity(a, { x: a.velocity.x * CFG.landDamp, y: a.velocity.y * CFG.landDamp });
+        Body.setAngularVelocity(a, a.angularVelocity * CFG.landDamp);
       }
     }
   }
@@ -174,8 +182,10 @@ export class Game {
         this.byBody.delete(b.id);
         this.cats.splice(i, 1);
         if (!this.over) {
-          this.hearts--;
-          this.events.push({ type: 'fall', cat, x: b.position.x / S });
+          // 한 번 무너질 때 여러 마리가 떨어져도 하트는 1개만
+          const free = this.time - this.lastHeartLoss < CFG.collapseGrace;
+          if (!free) { this.hearts--; this.lastHeartLoss = this.time; }
+          this.events.push({ type: 'fall', cat, x: b.position.x / S, free });
           if (this.hearts <= 0) { this.over = true; this.events.push({ type: 'gameover' }); }
         }
         continue;
@@ -200,7 +210,13 @@ export class Game {
     this.landedTop = landedTop;
     if (top > this.best && !this.over) this.best = top; // 게임오버 후엔 기록 고정
     const z = zoneIndexAt(this.best);
-    if (z > this.zone) { this.zone = z; this.events.push({ type: 'zone', zone: z }); }
+    if (z > this.zone) {
+      this.zone = z;
+      // 새 구간 도착 보상: 하트 1개 회복 (최대치까지)
+      const heal = !this.over && this.hearts < this.maxHearts;
+      if (heal) this.hearts++;
+      this.events.push({ type: 'zone', zone: z, heal });
+    }
 
     // 동결: 꼭대기에서 멀리 내려간 안착 고양이
     const limit = (-this.height + CFG.freezeDepth) * S;

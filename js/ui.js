@@ -179,12 +179,18 @@ export class UI {
 
   // ---- 타이틀 ----
   title(ctx, store) {
+    // 로고: "하늘까지" 위에 큰 "냥", 아래 영어 부제
     const bob = Math.round(Math.sin(this.time * 2) * 2);
-    const logo = pxText('냥탑', { size: 18, color: P.yellow, outline: P.line });
-    const shadow = pxText('냥탑', { size: 18, color: P.line, outline: P.line });
-    drawCentered(ctx, shadow, VIEW_W / 2 + 0, 34 + bob + 3, 3);
-    drawCentered(ctx, logo, VIEW_W / 2, 34 + bob, 3);
-    drawCentered(ctx, pxText('고양이를 높이높이 쌓아라!', { size: 11, color: P.white }), VIEW_W / 2, 108);
+    const bob2 = Math.round(Math.sin(this.time * 2 + 1.2) * 2);
+    const top = pxText('하늘까지', { size: 14, color: P.eyeBlue, outline: P.line });
+    const topS = pxText('하늘까지', { size: 14, color: P.line, outline: P.line });
+    drawCentered(ctx, topS, VIEW_W / 2, 16 + bob + 2, 2);
+    drawCentered(ctx, top, VIEW_W / 2, 16 + bob, 2);
+    const nyang = pxText('냥!', { size: 18, color: P.yellow, outline: P.line });
+    const nyangS = pxText('냥!', { size: 18, color: P.line, outline: P.line });
+    drawCentered(ctx, nyangS, VIEW_W / 2, 50 + bob2 + 3, 3);
+    drawCentered(ctx, nyang, VIEW_W / 2, 50 + bob2, 3);
+    drawCentered(ctx, pxText('FLY ME TO THE NYANG', { size: 10, color: P.pink, outline: P.line }), VIEW_W / 2, 112);
 
     const best = numText((store.best / 100).toFixed(2) + 'm', P.yellow);
     const bw = best.width + 10;

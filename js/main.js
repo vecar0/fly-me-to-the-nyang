@@ -89,12 +89,15 @@ function handleEvents() {
       }
       case 'perfect': audio.perfect(); break;
       case 'fall':
-        audio.fall();
-        slowmo = 0.4;
-        renderer.heartBreak(6 + game.hearts * 9, 20);
+        // 연쇄 붕괴로 하트가 안 깎인 낙하(free)는 조용히
+        if (!ev.free) {
+          audio.fall();
+          slowmo = 0.4;
+          renderer.heartBreak(6 + game.hearts * 9, 20);
+        }
         break;
       case 'zone':
-        ui.showBanner(ZONES[ev.zone].name + ' 도착!');
+        ui.showBanner(ZONES[ev.zone].name + ' 도착!' + (ev.heal ? ' ♥+1' : ''));
         audio.zone();
         audio.setZone(ev.zone);
         if (!store.zones.includes(ev.zone)) { store.zones.push(ev.zone); save(store); }
@@ -117,9 +120,9 @@ function demoAI() {
 }
 
 function savePhoto() {
-  const label = pxText(`냥탑  ${(game.best / 100).toFixed(2)}m`, { size: 12, color: P_LINE, outline: null });
+  const label = pxText(`하늘까지 냥  ${(game.best / 100).toFixed(2)}m`, { size: 12, color: P_LINE, outline: null });
   const img = renderer.snapshot(game, label);
-  const name = `nyangtop-${(game.best / 100).toFixed(2)}m.png`;
+  const name = `fly-me-to-the-nyang-${(game.best / 100).toFixed(2)}m.png`;
   const done = blob => {
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);

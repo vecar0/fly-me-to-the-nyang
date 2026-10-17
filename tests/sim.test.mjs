@@ -3,6 +3,7 @@
 import { Game, STEP } from '../js/sim.js';
 import { CAT_TYPES, CFG } from '../js/config.js';
 import { mulberry32, pickType, craneSpeed, createWind, updateWind, dailySeed } from '../js/spawner.js';
+import { playOne } from './difficulty.mjs';
 
 const results = [];
 function test(name, fn) {
@@ -62,17 +63,20 @@ test('방석 밖으로 떨어지면 하트가 줄고 3번이면 게임오버', (
   const g = new Game({ seed: 5 });
   runDrops(g, 1, () => 12, 3);
   assert(g.hearts === 2, '하트 ' + g.hearts);
-  runDrops(g, 2, () => 168, 3);
+  // 연쇄 붕괴 유예(collapseGrace)보다 간격을 띄워 따로따로 떨어뜨린다
+  runDrops(g, 1, () => 168, 3);
+  runDrops(g, 1, () => 168, 3);
   assert(g.hearts === 0 && g.over, `하트 ${g.hearts}, over ${g.over}`);
   assert(!g.drop(), '게임오버 후에도 놓아짐');
 });
 
-test('크레인 속도: 5마리마다 +4, 상한 110', () => {
-  assert(craneSpeed(0, 0, 0) === 40, 'v0');
-  assert(craneSpeed(4, 0, 0) === 40, 'v4');
-  assert(craneSpeed(5, 0, 0) === 44, 'v5');
-  assert(craneSpeed(500, 0, 0) === 110, 'cap');
-  for (let t = 0; t < 20; t += 0.37) assert(craneSpeed(500, 1600, t) <= 110 * 1.15 + 1e-9, 'wobble');
+test(`크레인 속도: ${CFG.craneEvery}마리마다 +${CFG.craneStep}, 상한 ${CFG.craneMax}`, () => {
+  const { craneBase: b, craneStep: st, craneEvery: ev, craneMax: mx } = CFG;
+  assert(craneSpeed(0, 0, 0) === b, 'v0');
+  assert(craneSpeed(ev - 1, 0, 0) === b, 'v(ev-1)');
+  assert(craneSpeed(ev, 0, 0) === b + st, 'v(ev)');
+  assert(craneSpeed(5000, 0, 0) === mx, 'cap');
+  for (let t = 0; t < 20; t += 0.37) assert(craneSpeed(5000, 1600, t) <= mx * (1 + CFG.wobbleAmp) + 1e-9, 'wobble');
 });
 
 test('해금 전 고양이는 나오지 않고, 같은 종 3연속이 없다', () => {
@@ -224,7 +228,7 @@ test('[10] 해금은 최고 높이 기준: 높이가 오르면 실제 게임에�
   assert(all, '못 나온 종: ' + CAT_TYPES.filter((_, i) => !seen.has(i)).map(t => t.name).join(','));
 });
 
-test('[15] 크레인은 탑 꼭대기보다 약 110px 위에 있다', () => {
+test(`[15] 크레인은 탑 꼭대기보다 약 ${CFG.craneAbove}px 위에 있다`, () => {
   const g = new Game({ seed: 77, hearts: 99 });
   const box = CAT_TYPES.findIndex(t => t.key === 'box');
   for (let i = 0; i < 10; i++) {
@@ -248,6 +252,62 @@ test('게임오버 후에는 기록이 더 오르지 않는다', () => {
   g.cats.length = 0;
   g.update(STEP);
   assert(g.best === b, '기록 변함');
+});
+
+test('한 번에 무너져 여러 마리가 떨어져도 하트는 1개만 깎인다', () => {
+  const g = new Game({ seed: 21 });
+  const box = CAT_TYPES.findIndex(t => t.key === 'box');
+  // 방석 밖 같은 자리에 연달아 3마리를 떨어뜨린다 (간격 < collapseGrace)
+  for (let i = 0; i < 3; i++) { g.crane.type = box; g.crane.cooldown = 0; g.drop(14); for (let s = 0; s < 20; s++) g.update(STEP); }
+  for (let s = 0; s < 120; s++) g.update(STEP);
+  assert(g.cats.length === 0, '안 떨어짐 ' + g.cats.length);
+  assert(g.hearts === CFG.hearts - 1, '하트 ' + g.hearts);
+  // 유예 시간이 지난 뒤 낙하는 다시 하트를 깎는다
+  for (let s = 0; s < 60 * CFG.collapseGrace; s++) g.update(STEP);
+  while (!g.canDrop()) g.update(STEP);
+  g.drop(14);
+  for (let s = 0; s < 150; s++) g.update(STEP);
+  assert(g.hearts === CFG.hearts - 2, '두 번째 낙하 후 하트 ' + g.hearts);
+});
+
+test('새 구간에 도착하면 하트가 1개 회복된다 (최대치 이하)', () => {
+  const g = new Game({ seed: 22 });
+  g.hearts = 1;
+  g.best = 305; g.update(STEP);
+  const ev = g.drainEvents().find(e => e.type === 'zone');
+  assert(ev && ev.heal && g.hearts === 2, `하트 ${g.hearts}`);
+  g.hearts = CFG.hearts;
+  g.best = 705; g.update(STEP);
+  assert(g.hearts === CFG.hearts, '최대치 초과 ' + g.hearts);
+});
+
+test('착지 순간 속도를 흡수해서 정중앙 낙하는 튕겨 나가지 않는다', () => {
+  let lost = 0;
+  for (const key of ['loaf', 'box', 'kitten', 'sit']) {
+    const g = new Game({ seed: 23 });
+    const ti = CAT_TYPES.findIndex(t => t.key === key);
+    g.crane.type = ti; g.drop(90);
+    for (let s = 0; s < 90; s++) g.update(STEP);
+    for (const k2 of ['loaf', 'box', 'kitten', 'sit']) {
+      while (!g.canDrop()) g.update(STEP);
+      g.crane.type = CAT_TYPES.findIndex(t => t.key === k2);
+      const top = g.cats.reduce((a, c) => (c.body.position.y < a.body.position.y ? c : a));
+      g.drop(top.body.position.x / 3);
+      for (let s = 0; s < 150; s++) g.update(STEP);
+    }
+    lost += CFG.hearts - g.hearts;
+  }
+  assert(lost === 0, '정중앙에 놓았는데 떨어진 횟수 ' + lost);
+  return '4×4 조합 16번 모두 안착';
+});
+
+test('[난이도] 보통 실력(조준 오차 ±4px) 자동 플레이 중간 기록 ≥ 3m', () => {
+  const bests = [];
+  for (let i = 0; i < 6; i++) bests.push(playOne(3000 + i, { aimNoise: 4, maxCats: 120 }).best / 100);
+  bests.sort((a, b) => a - b);
+  const median = (bests[2] + bests[3]) / 2;
+  assert(median >= 3, `중간 ${median.toFixed(2)}m (${bests.map(b => b.toFixed(1)).join(' ')})`);
+  return `중간 ${median.toFixed(2)}m: ${bests.map(b => b.toFixed(1)).join(' ')}`;
 });
 
 export { results };

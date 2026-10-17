@@ -100,8 +100,8 @@ const DESIGN = {
   box:     { fur: 'gray', pattern: 'box', face: [10, 4], gap: 3, ears: [[5, 2], [15, 2]] },
   kitten:  { fur: 'white', pattern: 'kitten', face: [6, 4], gap: 2, ears: [[2, 1], [9, 1]],
              tail: [[11, 6], [12, 5], [13, 4], [13, 3]] },
-  sit:     { fur: 'dark', pattern: 'sit', face: [8, 6], gap: 2, ears: [[6, 1], [10, 1]], eye: 'eyeGreen', mouth: 'darkL',
-             tail: [[14, 23], [16, 22], [17, 21], [18, 19], [18, 17], [17, 15], [16, 14]] },
+  sit:     { fur: 'dark', pattern: 'sit', face: [9, 6], gap: 2, ears: [[7, 1], [11, 1]], eye: 'eyeGreen', mouth: 'darkL',
+             tail: [[16, 21], [18, 20], [19, 19], [20, 17], [20, 15], [19, 13], [18, 12]] },
   ball:    { fur: 'cream', pattern: 'ball', face: [6, 9], gap: 2, ears: [[4, 3], [9, 2]] },
   stretch: { fur: 'gray', pattern: 'stripes', face: [5, 3], gap: 2, ears: [[3, 1], [8, 1]],
              tail: [[39, 4], [40, 3], [41, 2], [42, 2], [43, 3]] },
@@ -160,8 +160,8 @@ function buildCat(ti, expr) {
       if ((x - fx) ** 2 + ((y - fy - 1) * 1.3) ** 2 < 14) paint(x, y, P.brownL);
     for (let x = 0; x < 3; x++) for (let y = 5; y < 8; y++) paint(x, y, P.brown);
   } else if (d.pattern === 'sit') {
-    for (let y = 9; y < 15; y++) for (let x = 6; x < 10; x++) if (Math.abs(x - 7.5) < 2 - (y - 9) * 0.25) paint(x, y, P.darkL);
-    for (const x of [4, 5, 10, 11]) { paint(x, 23, P.white); paint(x, 22, P.white); }
+    for (let y = 9; y < 15; y++) for (let x = 7; x < 11; x++) if (Math.abs(x - 8.5) < 2 - (y - 9) * 0.25) paint(x, y, P.darkL);
+    for (const x of [4, 5, 12, 13]) { paint(x, 21, P.white); paint(x, 20, P.white); }
   } else if (d.pattern === 'ball') {
     for (let a = 0.2; a < 2.4; a += 0.08) {
       const x = Math.round(9 + Math.cos(a) * 6.5), y = Math.round(9 + Math.sin(a) * 6.5);

@@ -77,24 +77,28 @@ export async function run() {
 
   await test('[16] ⏸·🔈 버튼을 눌러도 고양이가 떨어지지 않는다', () => {
     N().advance(0.8); waitCrane();
-    const n = N().game.cats.length;
+    // 놓은 횟수(count)로 판정: 앞서 놓은 고양이가 방석 밖으로 떨어져 cats가 줄어드는 건 상관없다
+    const n = N().game.count;
+    const m0 = N().store.muted; // 저장된 이전 상태에 상관없이 '바뀌는지'를 본다
     tap(32, 307); // 소리
-    assert(N().store.muted === true, '소리 버튼 반응 없음');
+    assert(N().store.muted === !m0, '소리 버튼 반응 없음');
     tap(32, 307);
-    assert(N().game.cats.length === n, '소리 버튼에서 고양이가 떨어짐');
+    assert(N().store.muted === m0, '소리 버튼 두 번째 반응 없음');
+    assert(N().game.count === n, '소리 버튼에서 고양이를 놓음');
     tap(13, 307); // 일시정지
     assert(N().mode === 'pause', '일시정지 안 됨');
-    assert(N().game.cats.length === n, '일시정지 버튼에서 고양이가 떨어짐');
+    assert(N().game.count === n, '일시정지 버튼에서 고양이를 놓음');
   });
 
   await test('[17] 일시정지 중에는 물리와 크레인이 멈춘다', () => {
     const g = N().game;
     const cx = g.crane.x, snap = g.cats.map(c => c.body.position.y);
     N().advance(1.5);
+    const c0 = g.count;
     tap(90, 150); // 일시정지 중 화면 탭 → 무시
     assert(g.crane.x === cx, '크레인 이동');
     assert(g.cats.every((c, i) => c.body.position.y === snap[i]), '고양이 이동');
-    assert(g.cats.length === snap.length, '일시정지 중 놓아짐');
+    assert(g.count === c0, '일시정지 중 놓아짐');
     key('p');
     assert(N().mode === 'play', 'P로 재개 안 됨');
   });
