@@ -49,6 +49,9 @@ export const CFG = {
   craneBase: 32, craneStep: 3, craneEvery: 6, craneMax: 90,
   craneMargin: 12, craneAbove: 75,
   respawnDelay: 0.7,
+  // 가운데 쌓기 도우미: 크레인이 꼭대기 고양이 위(±slowZone)를 지날 땐 최저 slowMin배 속도,
+  // 꼭대기 중심에서 snapTol 안쪽으로 놓으면 정중앙으로 끌어당긴다
+  slowZone: 14, slowMin: 0.4, snapTol: 4,
   wobbleFrom: 1500, wobbleAmp: 0.15,
 
   windFrom: 700, windTo: 1200,

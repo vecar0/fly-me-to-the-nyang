@@ -1,7 +1,7 @@
 // 게임 규칙 + 물리. DOM 없이 돌아간다 (Matter는 globalThis.Matter).
 // 좌표: 월드 픽셀, y는 아래로 증가. 방석 윗면이 y=0, 높이 h = -y.
-import { CAT_TYPES, ZONES, CFG, S } from './config.js?v=1.5.1';
-import { mulberry32, pickType, craneSpeed, createWind, updateWind } from './spawner.js?v=1.5.1';
+import { CAT_TYPES, ZONES, CFG, S } from './config.js?v=1.6.0';
+import { mulberry32, pickType, craneSpeed, createWind, updateWind } from './spawner.js?v=1.6.0';
 
 const STEP = 1 / 60;
 const SUBSTEPS = 6; // 2로는 쌓인 탑이 10여 마리에서 저절로 무너져서 6으로 올림 (비용은 스텝당 0.1ms 미만)
@@ -31,6 +31,7 @@ export class Game {
     this.maxHearts = hearts;
     this.height = 0;
     this.landedTop = 0;
+    this.aimX = CFG.cushionX; // 다음 고양이를 놓기 좋은 x = 꼭대기 안착 고양이의 중심 (없으면 방석 가운데)
     this.best = 0;
     this.count = 0;
     this.perfects = 0;
@@ -71,12 +72,24 @@ export class Game {
 
   canDrop() { return !this.over && this.crane.type !== null; }
 
+  // 크레인이 꼭대기 위를 지날 때 속도 배율 (가운데에서 slowMin, slowZone 밖에서 1)
+  slowFactor(x) {
+    if (this.crane.type === null) return 1;
+    const d = Math.abs(x - this.aimX) / CFG.slowZone;
+    return d >= 1 ? 1 : CFG.slowMin + (1 - CFG.slowMin) * d * d;
+  }
+
+  // 지금 놓으면 자석 보정 범위 안인가 (조준선 색 표시용)
+  inSnap() { return this.canDrop() && Math.abs(this.crane.x - this.aimX) <= CFG.snapTol; }
+
   // x를 주면 그 위치에서 놓는다 (테스트용)
   drop(x) {
     if (!this.canDrop()) return false;
     const typeIdx = this.crane.type;
     const t = CAT_TYPES[typeIdx];
-    const px = x ?? this.crane.x;
+    let px = x ?? this.crane.x;
+    // 자석 보정: 꼭대기 중심 근처로 놓으면 정중앙에 맞춰 준다 (테스트처럼 x를 직접 주면 그대로)
+    if (x === undefined && Math.abs(px - this.aimX) <= CFG.snapTol) px = this.aimX;
     const body = this._makeBody(t, px, this.heldY());
     const b = body.bounds;
     const cat = {
@@ -135,7 +148,7 @@ export class Game {
     if (!this.over) {
       const held = c.type !== null ? CAT_TYPES[c.type] : null;
       const half = held ? held.w / 2 : 0;
-      c.speed = craneSpeed(this.count, this.height, this.time);
+      c.speed = craneSpeed(this.count, this.height, this.time) * this.slowFactor(c.x);
       c.x += c.dir * c.speed * dt;
       const lo = CFG.craneMargin + half, hi = 180 - CFG.craneMargin - half;
       if (c.x > hi) { c.x = hi; c.dir = -1; }
@@ -173,7 +186,7 @@ export class Game {
 
   _afterPhysics(dt) {
     const { Composite, Body } = globalThis.Matter;
-    let top = 0, landedTop = 0;
+    let top = 0, landedTop = 0, topX = CFG.cushionX;
     for (let i = this.cats.length - 1; i >= 0; i--) {
       const cat = this.cats[i];
       const b = cat.body;
@@ -191,7 +204,11 @@ export class Game {
         continue;
       }
       if (cat.landed) landedTop = Math.max(landedTop, -b.bounds.min.y / S);
-      if (b.isStatic) { top = Math.max(top, -b.bounds.min.y / S); continue; }
+      if (b.isStatic) {
+        const ct = -b.bounds.min.y / S;
+        if (ct > top) { top = ct; topX = b.position.x / S; }
+        continue;
+      }
       const moving = b.speed > CFG.settleSpeed || b.angularSpeed > CFG.settleAngular;
       cat.still = cat.landed && !moving ? cat.still + dt : 0;
       if (!cat.settled && cat.still >= CFG.settleTime) {
@@ -203,10 +220,14 @@ export class Game {
         }
         this.events.push({ type: 'settle', cat });
       }
-      if (cat.settled) top = Math.max(top, -b.bounds.min.y / S);
+      if (cat.settled) {
+        const ct = -b.bounds.min.y / S;
+        if (ct > top) { top = ct; topX = b.position.x / S; }
+      }
     }
 
     this.height = top;
+    this.aimX = topX;
     this.landedTop = landedTop;
     if (top > this.best && !this.over) this.best = top; // 게임오버 후엔 기록 고정
     const z = zoneIndexAt(this.best);
