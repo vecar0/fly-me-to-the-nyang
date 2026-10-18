@@ -1,7 +1,7 @@
 // 게임 규칙 + 물리. DOM 없이 돌아간다 (Matter는 globalThis.Matter).
 // 좌표: 월드 픽셀, y는 아래로 증가. 방석 윗면이 y=0, 높이 h = -y.
-import { CAT_TYPES, ZONES, CFG, S } from './config.js?v=1.6.0';
-import { mulberry32, pickType, craneSpeed, createWind, updateWind } from './spawner.js?v=1.6.0';
+import { CAT_TYPES, ZONES, CFG, S } from './config.js?v=1.6.1';
+import { mulberry32, pickType, craneSpeed, createWind, updateWind } from './spawner.js?v=1.6.1';
 
 const STEP = 1 / 60;
 const SUBSTEPS = 6; // 2로는 쌓인 탑이 10여 마리에서 저절로 무너져서 6으로 올림 (비용은 스텝당 0.1ms 미만)
@@ -76,26 +76,26 @@ export class Game {
   slowFactor(x) {
     if (this.crane.type === null) return 1;
     const d = Math.abs(x - this.aimX) / CFG.slowZone;
-    return d >= 1 ? 1 : CFG.slowMin + (1 - CFG.slowMin) * d * d;
+    if (d >= 1) return 1;
+    const e = d * d * (3 - 2 * d); // smoothstep: 속도가 덜컥 바뀌지 않게
+    return CFG.slowMin + (1 - CFG.slowMin) * e;
   }
-
-  // 지금 놓으면 자석 보정 범위 안인가 (조준선 색 표시용)
-  inSnap() { return this.canDrop() && Math.abs(this.crane.x - this.aimX) <= CFG.snapTol; }
 
   // x를 주면 그 위치에서 놓는다 (테스트용)
   drop(x) {
     if (!this.canDrop()) return false;
     const typeIdx = this.crane.type;
     const t = CAT_TYPES[typeIdx];
-    let px = x ?? this.crane.x;
-    // 자석 보정: 꼭대기 중심 근처로 놓으면 정중앙에 맞춰 준다 (테스트처럼 x를 직접 주면 그대로)
-    if (x === undefined && Math.abs(px - this.aimX) <= CFG.snapTol) px = this.aimX;
+    const px = x ?? this.crane.x;
+    // 자석 보정: 꼭대기 중심 근처로 놓으면 떨어지는 동안 정중앙 쪽으로 스르륵 끌어당긴다
+    // (순간이동하면 딱딱해 보여서 물리 속도로). 테스트처럼 x를 직접 주면 그대로
+    const magnet = x === undefined && Math.abs(px - this.aimX) <= CFG.snapTol ? this.aimX : null;
     const body = this._makeBody(t, px, this.heldY());
     const b = body.bounds;
     const cat = {
       id: this.nextId++, type: typeIdx, body, flip: this.crane.flip,
       off: { x: body.position.x / S - (b.min.x + b.max.x) / 2 / S, y: body.position.y / S - (b.min.y + b.max.y) / 2 / S },
-      landed: false, landT: -1, settled: false, still: 0, frozen: false, support: null,
+      landed: false, landT: -1, settled: false, still: 0, frozen: false, support: null, magnet,
     };
     this.cats.push(cat);
     this.byBody.set(body.id, cat);
@@ -141,7 +141,7 @@ export class Game {
   }
 
   update(dt = STEP) {
-    const { Engine, Sleeping } = globalThis.Matter;
+    const { Engine, Sleeping, Body } = globalThis.Matter;
     this.time += dt;
     const c = this.crane;
 
@@ -177,6 +177,10 @@ export class Game {
           b.force.x += this.wind.dir * b.mass * g * CFG.windG;
         }
         if (slowFall && !cat.landed) b.force.y -= b.mass * g * (1 - CFG.spaceFallScale);
+        if (cat.magnet !== null && !cat.landed) {
+          const dx = cat.magnet * S - b.position.x;
+          Body.setVelocity(b, { x: dx * CFG.magnetPull, y: b.velocity.y });
+        }
       }
       Engine.update(this.engine, (dt * 1000) / sub);
     }

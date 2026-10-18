@@ -1,9 +1,9 @@
 // 실제 게임 페이지(index.html)에서 도는 브라우저 테스트.
 // 진짜 pointerdown/keydown 이벤트를 캔버스·window에 보내고, 화면 버퍼 픽셀까지 확인한다.
 // 사용: 게임 페이지에서 `const { run } = await import('/tests/e2e.mjs'); await run()`
-import { VIEW_W, VIEW_H, CAT_TYPES, CFG } from '../js/config.js?v=1.6.0';
-import { Audio } from '../js/audio.js?v=1.6.0';
-import * as storage from '../js/storage.js?v=1.6.0';
+import { VIEW_W, VIEW_H, CAT_TYPES, CFG } from '../js/config.js?v=1.6.1';
+import { Audio } from '../js/audio.js?v=1.6.1';
+import * as storage from '../js/storage.js?v=1.6.1';
 
 const N = () => window.__nyang;
 const canvas = () => document.getElementById('game');
@@ -282,7 +282,7 @@ export async function run() {
   });
 
   await test('[30] 기울어진 고양이: 모든 종·각도에서 픽셀이 빠지지 않고 눈이 남는다', async () => {
-    const s = await import('../js/sprites.js?v=1.6.0');
+    const s = await import('../js/sprites.js?v=1.6.1');
     const stat = cv => {
       const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
       let n = 0, holes = 0, eye = 0;
@@ -311,7 +311,7 @@ export async function run() {
   });
 
   await test('[31] 숫자·영문 도트 글자: 게임에 쓰는 글자가 모두 정의돼 있다', async () => {
-    const s = await import('../js/sprites.js?v=1.6.0');
+    const s = await import('../js/sprites.js?v=1.6.1');
     const blank = s.numText(' ');
     for (const ch of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.!?/+-:m') {
       const c = s.numText(ch).getContext('2d'), d = c.getImageData(0, 0, c.canvas.width, c.canvas.height).data;
