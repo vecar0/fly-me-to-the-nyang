@@ -1,8 +1,8 @@
 // headless 시뮬레이션 테스트. DOM을 쓰지 않는 sim.js/spawner.js만 사용한다.
 // 브라우저(tests/index.html)에서도, Matter를 globalThis에 올린 Node에서도 돈다.
-import { Game, STEP } from '../js/sim.js?v=1.6.0';
-import { CAT_TYPES, CFG } from '../js/config.js?v=1.6.0';
-import { mulberry32, pickType, craneSpeed, createWind, updateWind, dailySeed } from '../js/spawner.js?v=1.6.0';
+import { Game, STEP } from '../js/sim.js?v=1.6.1';
+import { CAT_TYPES, CFG } from '../js/config.js?v=1.6.1';
+import { mulberry32, pickType, craneSpeed, createWind, updateWind, dailySeed } from '../js/spawner.js?v=1.6.1';
 import { playOne } from './difficulty.mjs';
 
 const results = [];
@@ -318,12 +318,15 @@ test('가운데 쌓기 도우미: 꼭대기 위에서 크레인이 느려지고,
   while (!g.canDrop()) g.update(STEP);
   const slow = g.slowFactor(g.aimX), far = g.slowFactor(g.aimX + CFG.slowZone + 1);
   assert(slow === CFG.slowMin && far === 1, `속도 배율 ${slow} / ${far}`);
-  // 크레인이 x=aimX+3 일 때 놓으면 aimX로
+  // 크레인이 x=aimX+3 일 때 놓으면: 놓는 순간엔 그 자리 그대로(순간이동 없음), 착지할 땐 aimX 근처
   g.crane.x = g.aimX + 3;
-  const target = g.aimX;
+  const target = g.aimX, x3 = g.crane.x;
   g.drop();
   const cat = g.cats.at(-1);
-  assert(Math.abs(cat.body.position.x / 3 - target) < 0.01, '끌어당기지 않음');
+  assert(Math.abs(cat.body.position.x / 3 - x3) < 0.01, '놓는 순간 순간이동함');
+  while (!cat.landed) g.update(STEP);
+  const landErr = Math.abs(cat.body.position.x / 3 - target);
+  assert(landErr < 0.6, '끌어당기지 않음: 착지 시 ' + landErr.toFixed(2) + 'px 어긋남');
   // 범위 밖(6px)은 그대로
   for (let s = 0; s < 120; s++) g.update(STEP);
   while (!g.canDrop()) g.update(STEP);
@@ -331,7 +334,7 @@ test('가운데 쌓기 도우미: 꼭대기 위에서 크레인이 느려지고,
   const x6 = g.crane.x;
   g.drop();
   assert(Math.abs(g.cats.at(-1).body.position.x / 3 - x6) < 0.01, '범위 밖인데 끌어당김');
-  return `느림 ${CFG.slowMin}배 (±${CFG.slowZone}px), 자석 ±${CFG.snapTol}px`;
+  return `느림 ${CFG.slowMin}배 (±${CFG.slowZone}px), 자석 ±${CFG.snapTol}px → 착지 시 ${landErr.toFixed(2)}px`;
 });
 
 export { results };

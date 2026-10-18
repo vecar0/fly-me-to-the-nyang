@@ -1,5 +1,5 @@
 // 팔레트 + 픽셀 스프라이트 생성. 모든 그림은 이 팔레트 색으로만 칠한다.
-import { CAT_TYPES } from './config.js?v=1.6.0';
+import { CAT_TYPES } from './config.js?v=1.6.1';
 
 export const P = {
   line: '#3a2838', eye: '#2a1f2e', white: '#fffaf2', paper: '#f3ece4',
@@ -422,6 +422,25 @@ export function catSpriteRot(ti, expr, flip, step) {
   c.putImageData(img, 0, 0);
   rotCache.set(k, cv);
   return cv;
+}
+
+// 착지 미리보기용 단색 실루엣 (고양이 모양 그대로). onCat: 고양이 위면 노랑, 아니면 진한 보라
+export function catGhost(ti, onCat) {
+  const k = ti + ':ghost:' + (onCat ? 1 : 0);
+  let s = catCache.get(k);
+  if (!s) {
+    const { mask, W, H } = buildCat(ti, 'calm');
+    const fill = onCat ? P.yellow : P.line, edge = onCat ? P.yellowS : P.line;
+    const g = new Grid(W, H);
+    for (let Y = 0; Y < H; Y++) for (let X = 0; X < W; X++) {
+      if (!mask[Y * W + X]) continue;
+      const rim = !mask[Y * W + X - 1] || !mask[Y * W + X + 1] || !mask[(Y - 1) * W + X] || !mask[(Y + 1) * W + X];
+      g.set(X, Y, rim ? edge : fill);
+    }
+    s = g.toCanvas();
+    catCache.set(k, s);
+  }
+  return s;
 }
 
 export function catSilhouette(ti) {
