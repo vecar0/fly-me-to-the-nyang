@@ -1,12 +1,12 @@
 // 루프 연결: 모드(title/play/pause/over/dex), 이벤트 → 연출/사운드/저장.
-import { VIEW_W, VIEW_H, VIEW_H_MIN, setViewH, CAT_TYPES, ZONES, CFG } from './config.js?v=1.6.2';
-import { Game, STEP } from './sim.js?v=1.6.2';
-import { dailySeed } from './spawner.js?v=1.6.2';
-import { Renderer } from './render.js?v=1.6.2';
-import { UI, pxText, fontsReady } from './ui.js?v=1.6.2';
-import { Audio } from './audio.js?v=1.6.2';
-import { bindInput } from './input.js?v=1.6.2';
-import { load, save } from './storage.js?v=1.6.2';
+import { VIEW_W, VIEW_H, VIEW_H_MIN, setViewH, CAT_TYPES, ZONES, CFG } from './config.js?v=1.7.0';
+import { Game, STEP } from './sim.js?v=1.7.0';
+import { dailySeed } from './spawner.js?v=1.7.0';
+import { Renderer } from './render.js?v=1.7.0';
+import { UI, pxText, fontsReady } from './ui.js?v=1.7.0';
+import { Audio } from './audio.js?v=1.7.0';
+import { bindInput } from './input.js?v=1.7.0';
+import { load, save } from './storage.js?v=1.7.0';
 
 const canvas = document.getElementById('game');
 const screen = canvas.getContext('2d');
@@ -44,6 +44,8 @@ function startGame(daily) {
   mode = 'play';
   audio.setZone(0);
   audio.startMusic();
+  // 데일리: 오늘은 누구나 같은 고양이 순서·바람이라는 걸 처음에 알려 준다
+  if (daily) ui.showBanner('오늘의 데일리!', '오늘은 모두 같은 고양이 순서예요', 2.6);
 }
 
 function goHome() {
@@ -57,7 +59,7 @@ function finish() {
   mode = 'over';
   overT = 0;
   const prev = isDaily ? (store.daily.key === dailyKey ? store.daily.best : 0) : store.best;
-  overInfo = { newBest: game.best > prev && game.best > 0, best: Math.max(prev, game.best) };
+  overInfo = { newBest: game.best > prev && game.best > 0, best: Math.max(prev, game.best), daily: isDaily };
   if (game.best > store.best) store.best = game.best;
   if (isDaily) {
     if (store.daily.key !== dailyKey) store.daily = { key: dailyKey, best: 0 };

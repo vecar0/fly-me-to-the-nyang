@@ -1,7 +1,7 @@
 // 저해상도 버퍼(180x320)에 월드를 그린다: 배경, 방석, 고양이, 크레인, 파티클, 카메라.
-import { VIEW_W, VIEW_H, extraH, CAT_TYPES, CFG } from './config.js?v=1.6.2';
-import { P, Grid, makeCanvas, catSprite, catSpriteRot, catGhost, ROT_STEPS, getIcons, numText } from './sprites.js?v=1.6.2';
-import { TEXTURES } from './textures.js?v=1.6.2';
+import { VIEW_W, VIEW_H, extraH, CAT_TYPES, CFG } from './config.js?v=1.7.0';
+import { P, Grid, makeCanvas, catSprite, catSpriteRot, catGhost, ROT_STEPS, getIcons, numText } from './sprites.js?v=1.7.0';
+import { TEXTURES } from './textures.js?v=1.7.0';
 
 const SC = {
   wall: '#f7dcc6', wallL: '#fbe8d8', wallD: '#e9c4ab',
@@ -40,6 +40,36 @@ function skyAt(h) {
   return c;
 }
 
+// 하늘 전체를 한 번 그려 둔 세로 띠 (높이 0~SKY_H). 색 단계 사이는 4x4 바둑판(Bayer) 디더로 부드럽게 잇는다.
+const SKY_H = 3200;
+const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+function buildSkyStrip() {
+  const cv = makeCanvas(VIEW_W, SKY_H), c = cv.getContext('2d');
+  const img = c.createImageData(VIEW_W, SKY_H), d = img.data;
+  const rgbOf = h => { const n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+  for (let r = 0; r < SKY_H; r++) {
+    const h = SKY_H - r;
+    let i = 0;
+    while (i < SKY.length - 1 && SKY[i + 1][0] <= h) i++;
+    let lo, hi, f;
+    if (i >= SKY.length - 1) { lo = hi = SKY[SKY.length - 1][1]; f = 0; }
+    else {
+      const [h0, c0] = SKY[i], [h1, c1] = SKY[i + 1];
+      const t = Math.max(0, Math.min(1, (h - h0) / (h1 - h0))) * 6; // 구간마다 6단계 색
+      const k = Math.floor(t);
+      lo = lerpHex(c0, c1, k / 6); hi = lerpHex(c0, c1, Math.min(6, k + 1) / 6); f = t - k;
+    }
+    const a = rgbOf(lo), b = rgbOf(hi);
+    for (let x = 0; x < VIEW_W; x++) {
+      const col = f * 16 > BAYER[(r % 4) * 4 + (x % 4)] + 0.5 ? b : a;
+      const o = (r * VIEW_W + x) * 4;
+      d[o] = col[0]; d[o + 1] = col[1]; d[o + 2] = col[2]; d[o + 3] = 255;
+    }
+  }
+  c.putImageData(img, 0, 0);
+  return cv;
+}
+
 function hash(n) {
   n = (n ^ 61) ^ (n >>> 16); n = Math.imul(n, 9); n ^= n >>> 4; n = Math.imul(n, 0x27d4eb2d); n ^= n >>> 15;
   return (n >>> 0) / 4294967296;
@@ -75,7 +105,6 @@ function buildRoom() {
   // 바닥 (나무 타일을 눕혀서 가로 마루)
   for (let wy = 220; wy < ROOM_BOT; wy++) for (let x = 0; x < VIEW_W; x++)
     g.set(x, Y(wy), wy === 220 ? SC.woodL : tex('wood', wy * 2, x));
-
   // 창문
   const wx0 = 16, wx1 = 60, wy0 = -205, wy1 = -130;
   for (let wy = wy0; wy < wy1; wy++) for (let x = wx0; x < wx1; x++) {
@@ -116,6 +145,84 @@ function buildRoom() {
     if (d <= 26) g.set(156 + x, Y(-112 + y), d > 18 ? P.blush : ((x + y) % 3 === 0 ? P.blush : P.pink));
   }
   for (let i = 0; i < 9; i++) g.set(162 + i, Y(-113 + Math.round(Math.sin(i * 0.8))), P.blush);
+
+  // 천장 가랜드: 처진 끈에 삼각 깃발 (분홍·노랑·하늘 번갈아, 벽지보다 한 톤 진하게)
+  const FLAG = [['#f2a7b5', '#d98798'], ['#f6d78c', '#e0b65e'], ['#a9d3ee', '#7fb3d8']];
+  const sag = x => Math.round(-291 + Math.sin((x / VIEW_W) * Math.PI) * 6);
+  for (let x = 0; x < VIEW_W; x++) g.set(x, Y(sag(x)), SC.woodS);
+  for (let i = 0, fx = 4; fx < VIEW_W - 6; i++, fx += 13) {
+    if (fx > 132 && fx < 150) continue; // 전등 줄 자리
+    const [fc, fs] = FLAG[i % 3], top = sag(fx + 3) + 1;
+    for (let j = 0; j < 6; j++) for (let k = j; k < 7 - j; k++) g.set(fx + k, Y(top + j), k === 6 - j || j === 5 ? fs : fc);
+  }
+
+  // 벽시계 (액자 왼쪽)
+  {
+    const cx = 104, cy = -240, R = 8;
+    for (let y = -R - 1; y <= R + 1; y++) for (let x = -R - 1; x <= R + 1; x++) {
+      const dd = Math.hypot(x, y);
+      if (dd > R + 0.6) continue;
+      g.set(cx + x, Y(cy + y), dd > R - 0.6 ? SC.woodS : dd > R - 1.6 ? SC.wood : P.creamL);
+    }
+    for (const [x, y] of [[0, -6], [6, 0], [0, 6], [-6, 0]]) g.set(cx + x, Y(cy + y), SC.woodS);
+    for (let k = 1; k <= 4; k++) g.set(cx, Y(cy - k), P.line); // 분침
+    for (let k = 1; k <= 3; k++) g.set(cx + k, Y(cy + Math.round(k * 0.5)), P.line); // 시침
+    g.set(cx, Y(cy), P.red);
+  }
+
+  // 벽걸이 책장 (창문 아래, 받침대 2개)
+  {
+    const x0 = 6, x1 = 44, t0 = -104, t1 = -54;
+    const BOOK = ['#d98a8f', '#8fb8d9', '#9cc59a', '#e6c27a', '#b59ad1', '#e8a77a'];
+    g.rect(x0, Y(t0), x1 - x0, t1 - t0, SC.woodS);
+    g.rect(x0 + 2, Y(t0 + 2), x1 - x0 - 4, t1 - t0 - 2, '#b37d55');
+    g.rect(x0, Y(t0), x1 - x0, 1, SC.woodL);
+    const shelves = [-80, -56];
+    for (const sy of shelves) { g.rect(x0 + 2, Y(sy), x1 - x0 - 4, 2, SC.wood); g.rect(x0 + 2, Y(sy), x1 - x0 - 4, 1, SC.woodL); }
+    for (const bx of [x0 + 4, x1 - 7]) for (let k = 0; k < 6; k++) g.rect(bx, Y(t1 + k), Math.max(1, 4 - k), 1, SC.woodS); // 받침대
+    let seed = 7;
+    for (const shelf of shelves) {
+      let bx = x0 + 3;
+      while (bx < x1 - 5) {
+        const r = hash(seed++), bw = 2 + Math.floor(r * 3), bh = 12 + Math.floor(hash(seed++) * 9);
+        if (hash(seed++) < 0.12) { bx += 3; continue; } // 빈틈
+        const col = BOOK[Math.floor(hash(seed++) * BOOK.length)];
+        for (let x = bx; x < Math.min(bx + bw, x1 - 3); x++) for (let wy = shelf - bh; wy < shelf; wy++)
+          g.set(x, Y(wy), x === bx ? lerpHex(col, '#ffffff', 0.25) : wy === shelf - bh + 3 ? lerpHex(col, '#3a2838', 0.35) : col);
+        bx += bw + (hash(seed++) < 0.3 ? 1 : 0);
+      }
+    }
+    // 맨 위 작은 고양이 인형 실루엣
+    const fy = t0 - 1;
+    g.rect(35, Y(fy - 4), 8, 5, P.line); g.rect(36, Y(fy - 5), 6, 1, P.line); g.set(36, Y(fy - 6), P.line); g.set(41, Y(fy - 6), P.line);
+    g.set(37, Y(fy - 3), '#f6b9c2'); g.set(40, Y(fy - 3), '#f6b9c2');
+  }
+
+  // 행잉 화분: 천장에서 끈으로 매단 화분 + 늘어진 덩굴
+  {
+    const hx = 78, potTop = -262;
+    // 고리에서 화분 양끝으로 벌어지는 끈 두 줄
+    for (let wy = -289; wy < potTop; wy++) {
+      const t = (wy + 289) / (potTop + 289);
+      g.set(Math.round(hx - t * 5), Y(wy), SC.woodL);
+      g.set(Math.round(hx + t * 5), Y(wy), SC.woodL);
+    }
+    g.rect(hx - 1, Y(-291), 3, 2, SC.woodS);
+    for (let wy = potTop; wy < potTop + 9; wy++) {
+      const inset = Math.floor((wy - potTop) / 4);
+      for (let x = hx - 6 + inset; x <= hx + 6 - inset; x++) g.set(x, Y(wy), wy === potTop ? P.creamL : x === hx - 6 + inset ? P.creamL : x === hx + 6 - inset ? P.creamS : P.cream);
+    }
+    g.rect(hx - 6, Y(potTop + 3), 13, 1, '#e9a3b0'); // 화분 띠
+    const LEAF = [P.green, P.greenS, '#a6d98f'];
+    for (const [sx0, len, dir] of [[hx - 6, 22, -1], [hx - 3, 14, -1], [hx + 4, 18, 1], [hx + 7, 26, 1], [hx, 9, 0]]) {
+      for (let k = 0; k < len; k++) {
+        const x = sx0 + dir * Math.round(Math.sin(k * 0.35) * 2 + k * 0.15), wy = potTop + 1 + k;
+        g.set(x, Y(wy), LEAF[1]);
+        if (k % 3 === 1) { g.set(x - 1, Y(wy), LEAF[0]); g.set(x + 1, Y(wy), LEAF[2]); g.set(x, Y(wy - 1), LEAF[0]); }
+      }
+    }
+    for (let x = hx - 6; x <= hx + 6; x++) if ((x + 1) % 2) g.set(x, Y(potTop - 1), LEAF[x % 3 === 0 ? 2 : 0]);
+  }
 
   // 전등
   g.rect(140, Y(-300), 1, 22, P.line);
@@ -166,44 +273,147 @@ function buildTown() {
   const top = -430, bot = ROOM_TOP;
   const g = new Grid(VIEW_W, bot - top);
   const Y = wy => wy - top;
-  // 노을 해
+  // 노을 해: 아래쪽은 가로 줄무늬로 갈라진 레트로 해
   for (let y = -26; y <= 26; y++) for (let x = -26; x <= 26; x++) {
     const d = Math.hypot(x, y);
-    if (d < 24) g.set(132 + x, Y(-374 + y), d > 21 ? '#ffc879' : SC.sun);
+    if (d >= 24) continue;
+    if (y > 4 && (y - 4) % 6 < Math.min(3, 1 + Math.floor((y - 4) / 8))) continue;
+    g.set(132 + x, Y(-374 + y), d > 21 ? '#ffc879' : y < -12 ? '#ffe7a8' : SC.sun);
   }
-  // 집들 실루엣
-  const houses = [[0, 22, 26], [20, 30, 36], [46, 18, 22], [62, 34, 30], [94, 22, 40], [114, 30, 26], [142, 20, 34], [160, 24, 28]];
-  for (const [x0, w, h] of houses) {
-    const base = bot;
-    for (let x = x0; x < x0 + w; x++) {
-      const roofH = Math.min(x - x0, x0 + w - 1 - x, 8);
-      const topY = base - h - roofH;
-      for (let wy = topY; wy < base; wy++) g.set(x, Y(wy), wy === topY ? SC.townS : SC.town);
+  // 먼 건물: 연한 보라 스카이라인 + 드문 불빛
+  const FAR = '#c49bbf', FARS = '#b58aaf';
+  for (let x = 0, i = 0; x < VIEW_W; i++) {
+    const w = 8 + Math.floor(hash(i * 13 + 1) * 14), h = 30 + Math.floor(hash(i * 13 + 2) * 26);
+    for (let xx = x; xx < Math.min(VIEW_W, x + w); xx++) for (let wy = bot - h; wy < bot; wy++)
+      g.set(xx, Y(wy), wy === bot - h ? FARS : FAR);
+    if (hash(i * 13 + 3) > 0.5) g.rect(x + Math.floor(w / 2) - 1, Y(bot - h - 5), 1, 5, FARS); // 안테나
+    for (let wy = bot - h + 4; wy < bot - 4; wy += 5) for (let xx = x + 2; xx < x + w - 2; xx += 3)
+      if (hash(xx * 7 + wy * 3) > 0.86) g.set(xx, Y(wy), '#f3d6a0');
+    x += w + Math.floor(hash(i * 13 + 4) * 3);
+  }
+  // 나무 (집 사이 동글동글)
+  const TREE = '#7f6a95', TREEL = '#93809f';
+  for (const [tx, r] of [[18, 7], [58, 6], [108, 8], [155, 6]]) {
+    for (let y = -r; y <= r; y++) for (let x = -r; x <= r; x++) {
+      const d = x * x + y * y * 1.2;
+      if (d < r * r) g.set(tx + x, Y(bot - 14 - r + y), d < (r - 2) * (r - 2) && x + y < -2 ? TREEL : TREE);
     }
-    for (let wy = base - h + 6; wy < base - 6; wy += 9) for (let x = x0 + 4; x < x0 + w - 5; x += 8)
-      if (hash(x * 31 + wy) > 0.35) { g.rect(x, Y(wy), 3, 4, P.yellow); g.rect(x, Y(wy + 3), 3, 1, P.yellowS); }
+    g.rect(tx, Y(bot - 14), 2, 14, '#6b587c');
   }
-  // 굴뚝
-  g.rect(70, Y(bot - 50), 6, 16, SC.townS);
-  g.rect(69, Y(bot - 51), 8, 2, SC.townS);
+  // 가까운 집: 벽·지붕·창틀·문·굴뚝
+  const WALLS = [['#a77a9e', '#94698c'], ['#b58aa6', '#a07893'], ['#9c7398', '#8a6387']];
+  const houses = [[0, 22, 26], [24, 28, 34], [55, 18, 22], [76, 32, 30], [110, 22, 38], [134, 26, 24], [162, 24, 30]];
+  houses.forEach(([x0, w, h], hi) => {
+    const [wall, wallS] = WALLS[hi % 3];
+    const base = bot, roofH = Math.min(9, Math.floor(w / 2));
+    for (let x = x0; x < Math.min(VIEW_W, x0 + w); x++) {
+      const rh = Math.min(x - x0, x0 + w - 1 - x, roofH);
+      const roofTop = base - h - rh;
+      for (let wy = roofTop; wy < base; wy++) {
+        let c = wy < base - h ? SC.townS : (x === x0 + w - 1 ? wallS : wall);
+        if (wy === roofTop) c = '#c99ac2'; // 지붕 끝 빛
+        if (wy === base - h) c = '#73536f'; // 처마 그림자
+        g.set(x, Y(wy), c);
+      }
+    }
+    // 창: 십자 창틀, 대부분 불 켜짐
+    for (let wy = base - h + 5; wy < base - 9; wy += 10) for (let x = x0 + 3; x < x0 + w - 6; x += 9) {
+      const lit = hash(x * 31 + wy) > 0.25;
+      g.rect(x - 1, Y(wy - 1), 6, 7, '#73536f');
+      g.rect(x, Y(wy), 4, 5, lit ? P.yellow : '#8a7aa0');
+      if (lit) { g.rect(x, Y(wy + 4), 4, 1, P.yellowS); g.set(x, Y(wy), '#fff5c8'); }
+      g.rect(x + 2, Y(wy), 1, 5, '#73536f'); g.rect(x, Y(wy + 2), 4, 1, '#73536f');
+    }
+    // 문
+    if (w >= 22) { const dx = x0 + w - 9; g.rect(dx - 1, Y(base - 10), 6, 10, '#73536f'); g.rect(dx, Y(base - 9), 4, 9, '#c48a5c'); g.set(dx + 3, Y(base - 5), P.yellow); }
+    // 굴뚝 + 연기
+    if (hi % 2 === 1) {
+      const cx = x0 + 4, cy = base - h - roofH + 2;
+      g.rect(cx, Y(cy - 9), 5, 9, SC.townS); g.rect(cx - 1, Y(cy - 10), 7, 2, '#73536f');
+      for (const [ox, oy, r] of [[2, -15, 2.2], [4, -20, 2.8], [2, -26, 3.2]])
+        for (let y = -4; y <= 4; y++) for (let x = -4; x <= 4; x++) if (x * x + y * y < r * r) g.set(cx + ox + x, Y(cy + oy + y), '#f0d4e6');
+    }
+  });
   return g.toCanvas();
 }
 
-function buildCloud(seed) {
-  const w = 44 + Math.floor(hash(seed) * 30), h = 22;
+// 구름: 동글동글한 덩어리 합집합. 위·왼쪽은 하이라이트, 아래로 갈수록 하늘빛 그림자(디더로 이어짐)
+function buildCloud(seed, small = false) {
+  const w = small ? 18 + Math.floor(hash(seed) * 12) : 44 + Math.floor(hash(seed) * 30);
+  const h = small ? 10 : 24;
+  const base = small ? 8 : 19;
   const g = new Grid(w, h);
+  const n = small ? 3 : 6;
   const blobs = [];
-  const n = 6;
   for (let i = 0; i < n; i++) {
     const fx = (i + 0.5) / n;
-    const r = 5 + Math.sin(fx * Math.PI) * 5 + hash(seed * 3 + i) * 2;
-    blobs.push([fx * (w - 4) + 2, 17 - r * 0.7, r]);
+    const r = (small ? 2.5 : 5) + Math.sin(fx * Math.PI) * (small ? 2.5 : 6) + hash(seed * 3 + i) * 2;
+    blobs.push([fx * (w - 4) + 2, base - r * 0.7, r]);
   }
-  const base = 17;
+  const inC = (x, y) => y <= base && blobs.some(([cx, cy, r]) => (x - cx) ** 2 + (y - cy) ** 2 < r * r);
+  const top = Math.min(...blobs.map(([, cy, r]) => cy - r));
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-    if (y > base) continue;
-    if (blobs.some(([cx, cy, r]) => (x - cx) ** 2 + (y - cy) ** 2 < r * r)) g.set(x, y, y >= base - 2 ? '#d6ecfb' : P.white);
+    if (!inC(x, y)) continue;
+    const t = (y - top) / (base - top); // 0 위 → 1 아래
+    const chk = (x + y) % 2 === 0;
+    let c;
+    if (small) c = t > 0.6 ? '#dcecf8' : '#f3f8fd';
+    else if (!inC(x, y + 1)) c = '#bcd6ee';                        // 맨 아래 가장자리
+    else if (t > 0.78 || (t > 0.66 && chk)) c = '#d6ecfb';          // 아래 그림자
+    else if (!inC(x - 1, y - 1) || (!inC(x, y - 2) && chk)) c = '#ffffff'; // 빛 받는 위·왼쪽
+    else c = P.white;
+    g.set(x, y, c);
   }
+  return g.toCanvas();
+}
+
+// 부드러운 값 노이즈 (격자점 해시를 smoothstep으로 보간) → 성운이 네모 블록으로 안 보이게
+function vnoise(x, y, seed) {
+  const xi = Math.floor(x), yi = Math.floor(y), fx = x - xi, fy = y - yi;
+  const h = (i, j) => hash((i * 73856093) ^ (j * 19349663) ^ (seed * 83492791));
+  const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+  const a = h(xi, yi) + (h(xi + 1, yi) - h(xi, yi)) * sx, b = h(xi, yi + 1) + (h(xi + 1, yi + 1) - h(xi, yi + 1)) * sx;
+  return a + (b - a) * sy;
+}
+
+// 우주 소품
+function buildNebula(seed) {
+  const W = 120, H = 90, g = new Grid(W, H);
+  const COL = [['#2c2770', '#352a78'], ['#3b2a6e', '#4a3073']][seed % 2];
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const nx = (x - W / 2) / (W / 2), ny = (y - H / 2) / (H / 2);
+    const fall = 1 - (nx * nx + ny * ny);
+    if (fall <= 0) continue;
+    const v = fall * 0.7 + vnoise(x / 11, y / 9, seed * 7 + 1) * 0.45 + vnoise(x / 4, y / 4, seed * 7 + 2) * 0.15;
+    const chk = (x + y) % 2 === 0;
+    if (v > 0.9) g.set(x, y, COL[1]);
+    else if (v > 0.72 && chk) g.set(x, y, COL[0]);
+  }
+  return g.toCanvas();
+}
+function buildRingPlanet() {
+  const W = 40, H = 24, g = new Grid(W, H), cx = 20, cy = 12, R = 8;
+  const ring = (x, y) => { const e = ((x - cx) / 18) ** 2 + ((y - cy) / 4.5) ** 2; return e < 1 && e > 0.55; };
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (ring(x, y) && y < cy) g.set(x, y, '#c99a62'); // 뒤쪽 고리
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy);
+    if (d > R) continue;
+    const band = Math.floor((y - cy + R) / 3) % 2;
+    let c = band ? '#e7a96b' : '#f0c08a';
+    if ((x - cx) + (y - cy) > R * 0.6) c = band ? '#c9874f' : '#d79c66';
+    if (d > R - 1) c = '#a86f45';
+    g.set(x, y, c);
+  }
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (ring(x, y) && y >= cy) g.set(x, y, y === cy ? '#f6dca8' : '#f3d29b'); // 앞쪽 고리
+  return g.toCanvas();
+}
+function buildSatellite() {
+  return fromRowsLocal(['..BB.......BB..', '.BBBB.WWW.BBBB.', 'XXXXXXWGWXXXXXX', '.BBBB.WWW.BBBB.', '..BB...X...BB..', '.......Y.......'],
+    { B: '#5b8fd6', X: '#8085a0', W: '#d2d5e4', G: '#a9adc4', Y: '#ffe27a' });
+}
+function fromRowsLocal(rows, colors) {
+  const g = new Grid(rows[0].length, rows.length);
+  rows.forEach((row, y) => [...row].forEach((ch, x) => { if (colors[ch]) g.set(x, y, colors[ch]); }));
   return g.toCanvas();
 }
 
@@ -256,9 +466,14 @@ export class Renderer {
     this.buf = makeCanvas(VIEW_W, VIEW_H);
     this.ctx = this.buf.getContext('2d');
     this.ctx.imageSmoothingEnabled = false;
+    this.sky = buildSkyStrip();
     this.room = buildRoom();
     this.town = buildTown();
     this.clouds = [0, 1, 2, 3].map(i => buildCloud(i + 1));
+    this.smallClouds = [0, 1, 2].map(i => buildCloud(i + 11, true));
+    this.nebulae = [buildNebula(0), buildNebula(1)];
+    this.ringPlanet = buildRingPlanet();
+    this.satellite = buildSatellite();
     this.earth = buildEarth();
     this.moon = buildMoon();
     this.icons = getIcons();
@@ -402,16 +617,27 @@ export class Renderer {
     ctx.save();
     ctx.translate(sx, sy);
 
-    // 하늘 띠
-    for (let row = -8; row < vh + 8; row += 8) {
-      const wy = camTop + row;
-      const band = Math.floor(-wy / 8) * 8;
-      const y = -band - camTop;
-      ctx.fillStyle = skyAt(band);
-      ctx.fillRect(-4, y - 8 + 1, VIEW_W + 8, 8);
+    // 하늘: 디더 띠에서 화면 높이만큼 잘라 그린다 (띠 위쪽은 맨 위 색으로)
+    {
+      const r0 = SKY_H + camTop; // 화면 맨 위 줄에 해당하는 띠의 줄
+      if (r0 < 0) { ctx.fillStyle = SKY[SKY.length - 1][1]; ctx.fillRect(-4, -4, VIEW_W + 8, Math.min(vh, -r0) + 8); }
+      const r1 = Math.max(0, r0), dy = r1 - r0, hh = Math.min(SKY_H - r1, vh + 8 - dy);
+      if (hh > 0) ctx.drawImage(this.sky, 0, r1, VIEW_W, hh, 0, dy, VIEW_W, hh);
+      if (sx || sy) { // 흔들림으로 비는 가장자리
+        ctx.fillStyle = skyAt(Math.max(0, -camTop));
+        ctx.fillRect(-4, -4, 4, vh + 8); ctx.fillRect(VIEW_W, -4, 4, vh + 8); ctx.fillRect(-4, -4, VIEW_W + 8, 4); ctx.fillRect(-4, vh, VIEW_W + 8, 4);
+      }
     }
     const hTop = -camTop, hBot = -(camTop + vh);
 
+    // 성운 (패럴랙스 0.35): 우주 구간 배경의 은은한 구름
+    if (hTop > 1250) {
+      for (const [i, wh0, x] of [[0, 1550, 30], [1, 2050, 70], [0, 2600, 10]]) {
+        const img = this.nebulae[i];
+        const y = Math.round((-wh0 - camTop) * 0.35 + vh * 0.5 - img.height / 2);
+        if (y < vh && y > -img.height) ctx.drawImage(img, x, y);
+      }
+    }
     // 별 (패럴랙스 0.4)
     if (hTop > 1050) {
       const L = camTop * 0.4;
@@ -435,10 +661,49 @@ export class Renderer {
       const y = Math.round(-1095 - camTop * 0.5) - this.moon.height / 2;
       if (y < vh && y > -this.moon.height) ctx.drawImage(this.moon, Math.round(118 - this.moon.width / 2), y);
     }
+    // 고리 행성 (패럴랙스 0.25)
+    if (hTop > 1350) {
+      const y = Math.round((-1900 - camTop) * 0.25 + vh * 0.3 - this.ringPlanet.height / 2);
+      if (y < vh && y > -this.ringPlanet.height) ctx.drawImage(this.ringPlanet, 128, y);
+    }
+    // 별똥별: 우주 구간에서 7초마다 한 번, 0.5초 동안 대각선으로
+    if (hTop > 1300) {
+      const k = Math.floor(T / 7), ph = T - k * 7;
+      if (ph < 0.5) {
+        const x0 = 20 + hash(k * 3 + 1) * 140, y0 = 20 + hash(k * 3 + 2) * (vh * 0.4);
+        const p = ph / 0.5;
+        for (let i = 0; i < 7; i++) {
+          const q = p * 40 - i * 2;
+          if (q < 0) continue;
+          ctx.fillStyle = i === 0 ? P.white : i < 3 ? P.yellow : 'rgba(255,226,122,0.5)';
+          ctx.fillRect(Math.round(x0 - q), Math.round(y0 + q * 0.5), 1, 1);
+        }
+      }
+    }
+    // 인공위성 (우주 초입을 천천히 가로지름)
+    if (hTop > 1200 && hBot < 1900) {
+      const y = Math.round((-1450 - camTop) * 0.6 + vh * 0.3);
+      const x = Math.round(((T * 6) % 260) - 40);
+      if (y < vh && y > -10) ctx.drawImage(this.satellite, x, y);
+    }
     // 멀리 보이는 지구 (패럴랙스 0.3)
     if (hTop > 1150 && hBot < 2300) {
       const y = Math.round(-390 - camTop * 0.3) - this.earth.height / 2;
       if (y < vh && y > -this.earth.height) ctx.drawImage(this.earth, 14, y);
+    }
+    // 먼 작은 구름 (패럴랙스 0.5, 느리게)
+    if (hTop > 420 && hBot < 1400) {
+      const L = camTop * 0.5;
+      const c0 = Math.floor(L / 40) - 1, c1 = Math.floor((L + vh) / 40) + 1;
+      for (let c = c0; c <= c1; c++) {
+        if (hash(c * 53 + 9) < 0.35) continue;
+        const y = Math.round(c * 40 + hash(c * 59) * 20 - L);
+        const wh = -(camTop + y);
+        if (wh < 450 || wh > 1350) continue;
+        const img = this.smallClouds[Math.floor(hash(c * 61) * 3)];
+        const x = Math.round(((hash(c * 67) * 240 + T * (1.5 + hash(c * 71) * 2)) % 240) - 30);
+        ctx.drawImage(img, x, y);
+      }
     }
     // 구름 (패럴랙스 0.7)
     if (hTop > 520 && hBot < 1500) {
