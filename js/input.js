@@ -1,5 +1,5 @@
 // 탭/클릭/키 입력 → 저해상도 버퍼 좌표로 변환해서 넘긴다.
-import { VIEW_W, VIEW_H } from './config.js?v=1.6.1';
+import { VIEW_W, VIEW_H } from './config.js?v=1.6.2';
 
 export function bindInput(canvas, { onTap, onKey, onFirst }) {
   let first = true;
