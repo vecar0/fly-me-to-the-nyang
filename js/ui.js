@@ -1,7 +1,7 @@
 // HUD, 타이틀, 일시정지, 게임오버, 도감. 전부 저해상도 버퍼에 픽셀로 그린다.
-import { VIEW_W, VIEW_H, extraH, CAT_TYPES, ZONES } from './config.js?v=1.6.2';
-import { P, Grid, makeCanvas, catSprite, catSilhouette, numText, getIcons } from './sprites.js?v=1.6.2';
-import { VERSION } from './version.js?v=1.6.2';
+import { VIEW_W, VIEW_H, extraH, CAT_TYPES, ZONES } from './config.js?v=1.7.0';
+import { P, Grid, makeCanvas, catSprite, catSilhouette, numText, getIcons } from './sprites.js?v=1.7.0';
+import { VERSION } from './version.js?v=1.7.0';
 
 // 한글 픽셀 폰트 Galmuri(OFL, fonts/OFL-Galmuri.txt). 정해진 크기(11 Bold=12px, 9=10px)로만 그려야 픽셀이 칸에 딱 맞는다.
 // size 10 이하는 작은 글씨, 그 외는 굵은 글씨. 더 크게는 drawCentered의 정수 배율로 키운다.
@@ -96,7 +96,7 @@ export class UI {
 
   update(dt) {
     this.time += dt;
-    if (this.banner) { this.banner.t += dt; if (this.banner.t > 1.8) this.banner = null; }
+    if (this.banner) { this.banner.t += dt; if (this.banner.t > this.banner.dur) this.banner = null; }
     if (this.toast) { this.toast.t += dt; if (this.toast.t > 2.2) this.toast = null; }
     if (this.pressed) { this.pressed.t += dt; if (this.pressed.t > 0.12) this.pressed = null; }
   }
@@ -114,7 +114,8 @@ export class UI {
     return null;
   }
 
-  showBanner(text) { this.banner = { text, t: 0 }; }
+  // sub: 아래 작은 설명 한 줄, dur: 보이는 시간(초)
+  showBanner(text, sub = '', dur = 1.8) { this.banner = { text, sub, dur, t: 0 }; }
   showToast(type) { this.toast = { type, t: 0 }; }
 
   button(ctx, id, x, y, w, h, label, style = 'pink') {
@@ -188,13 +189,16 @@ export class UI {
   overlays(ctx) {
     if (this.banner) {
       const t = this.banner.t;
-      const slide = t < 0.2 ? (1 - t / 0.2) * -40 : (t > 1.5 ? ((t - 1.5) / 0.3) * -40 : 0);
+      const out = this.banner.dur - 0.3;
+      const slide = t < 0.2 ? (1 - t / 0.2) * -40 : (t > out ? ((t - out) / 0.3) * -40 : 0);
       const img = pxText(this.banner.text, { size: 13, color: P.yellow });
       const s = img.width * 2 <= VIEW_W - 8 ? 2 : 1; // 긴 문구는 1배로
+      const sub = this.banner.sub ? pxText(this.banner.sub, { size: 10, color: P.white, outline: null }) : null;
       const y = 110 + Math.round(slide);
       ctx.fillStyle = 'rgba(27,22,64,0.55)';
-      ctx.fillRect(0, y - 4, VIEW_W, img.height * s + 8);
+      ctx.fillRect(0, y - 4, VIEW_W, img.height * s + 8 + (sub ? sub.height + 1 : 0));
       drawCentered(ctx, img, VIEW_W / 2, y, s);
+      if (sub) drawCentered(ctx, sub, VIEW_W / 2, y + img.height * s + 1);
     }
     if (this.toast) {
       const t = this.toast.t;
@@ -263,7 +267,7 @@ export class UI {
     drawCentered(ctx, pxText('게임 오버', { size: 12, color: P.blush, outline: null }), VIEW_W / 2, y0 + 6);
     drawCentered(ctx, numText((game.best / 100).toFixed(2) + 'm', P.yellow, P.line, 3), VIEW_W / 2, y0 + 23);
 
-    const bestLine = pxText('최고 기록 ' + (info.best / 100).toFixed(2) + 'm', { size: 11, color: P.line, outline: null });
+    const bestLine = pxText((info.daily ? '오늘 기록 ' : '최고 기록 ') + (info.best / 100).toFixed(2) + 'm', { size: 11, color: P.line, outline: null });
     drawCentered(ctx, bestLine, VIEW_W / 2 - (info.newBest ? 12 : 0), y0 + 46);
     if (info.newBest && Math.floor(this.time * 4) % 2 === 0) {
       ctx.drawImage(numText('NEW!', P.white, P.red), Math.round(VIEW_W / 2 + bestLine.width / 2 - 8), y0 + 50);
