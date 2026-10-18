@@ -1,5 +1,5 @@
 // 팔레트 + 픽셀 스프라이트 생성. 모든 그림은 이 팔레트 색으로만 칠한다.
-import { CAT_TYPES } from './config.js?v=1.5.1';
+import { CAT_TYPES } from './config.js?v=1.6.0';
 
 export const P = {
   line: '#3a2838', eye: '#2a1f2e', white: '#fffaf2', paper: '#f3ece4',

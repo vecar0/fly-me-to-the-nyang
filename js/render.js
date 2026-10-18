@@ -1,7 +1,7 @@
 // 저해상도 버퍼(180x320)에 월드를 그린다: 배경, 방석, 고양이, 크레인, 파티클, 카메라.
-import { VIEW_W, VIEW_H, extraH, CAT_TYPES, CFG } from './config.js?v=1.5.1';
-import { P, Grid, makeCanvas, catSprite, catSpriteRot, ROT_STEPS, getIcons, numText } from './sprites.js?v=1.5.1';
-import { TEXTURES } from './textures.js?v=1.5.1';
+import { VIEW_W, VIEW_H, extraH, CAT_TYPES, CFG } from './config.js?v=1.6.0';
+import { P, Grid, makeCanvas, catSprite, catSpriteRot, ROT_STEPS, getIcons, numText } from './sprites.js?v=1.6.0';
+import { TEXTURES } from './textures.js?v=1.6.0';
 
 const SC = {
   wall: '#f7dcc6', wallL: '#fbe8d8', wallD: '#e9c4ab',
@@ -565,9 +565,32 @@ export class Renderer {
     const t = CAT_TYPES[c.type];
     const bob = Math.round(Math.sin(this.time * 4) * 0.6);
     const hy = Math.round(game.heldY() - camTop) + bob;
-    // 조준선
-    ctx.fillStyle = 'rgba(58,40,56,0.28)';
-    for (let y = hy + t.h / 2 + 3; y < vh; y += 4) ctx.fillRect(cx, y, 1, 2);
+    // 착지 지점: 고양이 폭 아래로 가장 높은 윗면(고양이·방석)
+    const half = t.w / 2;
+    let land = CFG.fallY + 200;
+    const over = b => b.bounds.max.x / 3 > c.x - half && b.bounds.min.x / 3 < c.x + half;
+    if (over(game.cushion)) land = game.cushion.bounds.min.y / 3;
+    for (const cat of game.cats) if (cat.landed && over(cat.body)) land = Math.min(land, cat.body.bounds.min.y / 3);
+    const ly = Math.round(land - camTop);
+    // 조준선: 자석 범위(꼭대기 정중앙 근처)에 들어오면 노랗게
+    const snap = game.inSnap();
+    ctx.fillStyle = snap ? P.yellowS : 'rgba(58,40,56,0.28)';
+    for (let y = hy + t.h / 2 + 3; y < Math.min(vh, ly - 2); y += 4) ctx.fillRect(cx, y, 1, 2);
+    // 착지 그림자 (자석 범위면 노란 띠 + 아래 화살표)
+    if (ly < vh + 4) {
+      const sw = Math.round(t.w * 0.8), sx = cx - (sw >> 1);
+      if (snap) {
+        ctx.fillStyle = P.line; ctx.fillRect(sx - 1, ly - 4, sw + 2, 4);
+        ctx.fillStyle = P.yellow; ctx.fillRect(sx, ly - 3, sw, 2);
+        const ay = ly - 9 + (Math.floor(this.time * 6) % 2); // 콕콕 튀는 화살표
+        ctx.fillStyle = P.line; ctx.fillRect(cx - 3, ay - 1, 7, 3); ctx.fillRect(cx - 2, ay + 2, 5, 1); ctx.fillRect(cx - 1, ay + 3, 3, 1);
+        ctx.fillStyle = P.yellow; ctx.fillRect(cx - 2, ay, 5, 1); ctx.fillRect(cx - 1, ay + 1, 3, 1); ctx.fillRect(cx, ay + 2, 1, 1);
+      } else {
+        ctx.fillStyle = 'rgba(58,40,56,0.3)';
+        ctx.fillRect(sx, ly - 2, sw, 2);
+        ctx.fillRect(sx + 2, ly - 3, sw - 4, 1);
+      }
+    }
     const img = catSprite(c.type, 'calm');
     ctx.save();
     ctx.translate(cx, hy);
