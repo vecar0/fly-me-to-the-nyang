@@ -1,8 +1,8 @@
 // headless 시뮬레이션 테스트. DOM을 쓰지 않는 sim.js/spawner.js만 사용한다.
 // 브라우저(tests/index.html)에서도, Matter를 globalThis에 올린 Node에서도 돈다.
-import { Game, STEP } from '../js/sim.js?v=1.6.1';
-import { CAT_TYPES, CFG } from '../js/config.js?v=1.6.1';
-import { mulberry32, pickType, craneSpeed, createWind, updateWind, dailySeed } from '../js/spawner.js?v=1.6.1';
+import { Game, STEP } from '../js/sim.js?v=1.6.2';
+import { CAT_TYPES, CFG } from '../js/config.js?v=1.6.2';
+import { mulberry32, pickType, craneSpeed, createWind, updateWind, dailySeed } from '../js/spawner.js?v=1.6.2';
 import { playOne } from './difficulty.mjs';
 
 const results = [];
@@ -335,6 +335,37 @@ test('가운데 쌓기 도우미: 꼭대기 위에서 크레인이 느려지고,
   g.drop();
   assert(Math.abs(g.cats.at(-1).body.position.x / 3 - x6) < 0.01, '범위 밖인데 끌어당김');
   return `느림 ${CFG.slowMin}배 (±${CFG.slowZone}px), 자석 ±${CFG.snapTol}px → 착지 시 ${landErr.toFixed(2)}px`;
+});
+
+test('무너져도 공중에 고정된(동결) 고양이가 남지 않는다', () => {
+  // 조준을 ±8px로 엉성하게 해서 무너짐을 자주 만든다(그래도 1.5m 넘게 쌓여 동결이 일어남). 동결 고양이는 바로 아래(3px)에 받침이 있어야 한다
+  let floating = 0, frozen = 0;
+  for (const seed of [1, 2, 3]) {
+    const g = new Game({ seed, hearts: 99 });
+    const r = mulberry32(seed * 3);
+    for (let i = 0; i < 60; i++) {
+      while (!g.canDrop()) g.update(STEP);
+      let top = null;
+      for (const c of g.cats) if (c.settled && (!top || c.body.bounds.min.y < top.body.bounds.min.y)) top = c;
+      g.drop((top ? top.body.position.x / 3 : 90) + (r() - 0.5) * 16);
+      for (let s = 0; s < 70; s++) g.update(STEP);
+    }
+    const all = [g.cushion, ...g.cats.map(c => c.body)];
+    for (const c of g.cats) {
+      if (!c.body.isStatic) continue;
+      frozen++;
+      const b = c.body;
+      let gap = Infinity;
+      for (const o of all) {
+        if (o === b || o.bounds.max.x <= b.bounds.min.x + 1 || o.bounds.min.x >= b.bounds.max.x - 1) continue;
+        if (o.bounds.min.y >= b.bounds.min.y + 3) gap = Math.min(gap, (o.bounds.min.y - b.bounds.max.y) / 3);
+      }
+      if (gap > 3) floating++;
+    }
+  }
+  assert(frozen >= 10, `동결이 거의 안 일어나 검사가 안 됨 (${frozen}마리)`);
+  assert(floating === 0, `공중에 고정된 고양이 ${floating}마리 / 동결 ${frozen}마리`);
+  return `엉성한 3판, 동결 ${frozen}마리 모두 받침 있음`;
 });
 
 export { results };

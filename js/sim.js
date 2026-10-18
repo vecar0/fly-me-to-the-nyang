@@ -1,7 +1,7 @@
 // 게임 규칙 + 물리. DOM 없이 돌아간다 (Matter는 globalThis.Matter).
 // 좌표: 월드 픽셀, y는 아래로 증가. 방석 윗면이 y=0, 높이 h = -y.
-import { CAT_TYPES, ZONES, CFG, S } from './config.js?v=1.6.1';
-import { mulberry32, pickType, craneSpeed, createWind, updateWind } from './spawner.js?v=1.6.1';
+import { CAT_TYPES, ZONES, CFG, S } from './config.js?v=1.6.2';
+import { mulberry32, pickType, craneSpeed, createWind, updateWind } from './spawner.js?v=1.6.2';
 
 const STEP = 1 / 60;
 const SUBSTEPS = 6; // 2로는 쌓인 탑이 10여 마리에서 저절로 무너져서 6으로 올림 (비용은 스텝당 0.1ms 미만)
@@ -22,6 +22,7 @@ export class Game {
       isStatic: true, friction: 1, frictionStatic: 1.2, chamfer: { radius: 2 * S }, label: 'cushion',
     });
     Composite.add(this.engine.world, this.cushion);
+    this.statics = [this.cushion]; // 고정된 바디: 방석 + 동결 고양이 (동결 판정 받침 후보)
 
     this.cats = [];
     this.byBody = new Map();
@@ -189,8 +190,8 @@ export class Game {
   }
 
   _afterPhysics(dt) {
-    const { Composite, Body } = globalThis.Matter;
-    let top = 0, landedTop = 0, topX = CFG.cushionX;
+    const { Composite, Body, Sleeping } = globalThis.Matter;
+    let top = 0, landedTop = 0, topX = CFG.cushionX, removed = false;
     for (let i = this.cats.length - 1; i >= 0; i--) {
       const cat = this.cats[i];
       const b = cat.body;
@@ -198,6 +199,7 @@ export class Game {
         Composite.remove(this.engine.world, b);
         this.byBody.delete(b.id);
         this.cats.splice(i, 1);
+        removed = true;
         if (!this.over) {
           // 한 번 무너질 때 여러 마리가 떨어져도 하트는 1개만
           const free = this.time - this.lastHeartLoss < CFG.collapseGrace;
@@ -230,6 +232,9 @@ export class Game {
       }
     }
 
+    // 떨어져 나간 고양이가 있으면 잠든 고양이를 깨운다: 받침이 사라졌는데 잠든 채 공중에 남지 않게
+    if (removed) for (const c of this.cats) if (c.body.isSleeping) Sleeping.set(c.body, false);
+
     this.height = top;
     this.aimX = topX;
     this.landedTop = landedTop;
@@ -243,28 +248,38 @@ export class Game {
       this.events.push({ type: 'zone', zone: z, heal });
     }
 
-    // 동결: 꼭대기에서 멀리 내려간 안착 고양이
+    // 동결: 꼭대기에서 멀리 내려간 안착 고양이. 아래에서부터 차례로, 이미 고정된 것(방석·동결 고양이) 위에
+    // 얹힌 고양이만 고정한다. 움직이는 고양이에 기대어 있을 때 고정하면 받침이 무너진 뒤 공중에 남는다.
     const limit = (-this.height + CFG.freezeDepth) * S;
-    let dynamic = [];
-    for (const cat of this.cats) {
-      const b = cat.body;
-      if (b.isStatic) continue;
-      if (cat.settled && b.bounds.min.y > limit) this._freeze(cat);
-      else dynamic.push(cat);
+    const cand = this.cats.filter(c => !c.body.isStatic && c.settled).sort((a, b) => b.body.position.y - a.body.position.y);
+    for (const cat of cand) if (cat.body.bounds.min.y > limit && this._onStatic(cat.body)) this._freeze(cat);
+    let extra = this.dynamicCount() - CFG.maxDynamic;
+    for (const cat of cand) {
+      if (extra <= 0) break;
+      if (!cat.body.isStatic && this._onStatic(cat.body)) { this._freeze(cat); extra--; }
     }
-    if (dynamic.length > CFG.maxDynamic) {
-      dynamic = dynamic.filter(c => c.settled).sort((a, b) => b.body.position.y - a.body.position.y);
-      let extra = this.dynamicCount() - CFG.maxDynamic;
-      for (const cat of dynamic) {
-        if (extra-- <= 0) break;
-        this._freeze(cat);
-      }
+  }
+
+  // 바디가 고정된 것(방석·동결 고양이) 위에 얹혀 있나: 살짝 아래로 내려 겹치는 고정 바디가 있고, 닿는 점이 몸 아래쪽일 때
+  _onStatic(b) {
+    const { Body, Query } = globalThis.Matter;
+    const near = [];
+    for (const o of this.statics) {
+      if (o.bounds.max.x <= b.bounds.min.x || o.bounds.min.x >= b.bounds.max.x) continue;
+      if (o.bounds.min.y > b.bounds.max.y + 2 * S || o.bounds.max.y < b.position.y) continue;
+      near.push(o);
     }
+    if (!near.length) return false;
+    Body.translate(b, { x: 0, y: 0.5 * S });
+    const hits = Query.collides(b, near);
+    Body.translate(b, { x: 0, y: -0.5 * S });
+    return hits.some(h => h.supports.some(p => p && p.y > b.position.y));
   }
 
   _freeze(cat) {
     globalThis.Matter.Body.setStatic(cat.body, true);
     cat.frozen = true;
+    this.statics.push(cat.body);
   }
 
   dynamicCount() {
