@@ -1,7 +1,7 @@
 // HUD, 타이틀, 일시정지, 게임오버, 도감. 전부 저해상도 버퍼에 픽셀로 그린다.
-import { VIEW_W, VIEW_H, extraH, CAT_TYPES, ZONES } from './config.js?v=1.7.0';
-import { P, Grid, makeCanvas, catSprite, catSilhouette, numText, getIcons } from './sprites.js?v=1.7.0';
-import { VERSION } from './version.js?v=1.7.0';
+import { VIEW_W, VIEW_H, extraH, CAT_TYPES, ZONES } from './config.js?v=1.8.0';
+import { P, Grid, makeCanvas, catSprite, catSilhouette, numText, getIcons } from './sprites.js?v=1.8.0';
+import { VERSION } from './version.js?v=1.8.0';
 
 // 한글 픽셀 폰트 Galmuri(OFL, fonts/OFL-Galmuri.txt). 정해진 크기(11 Bold=12px, 9=10px)로만 그려야 픽셀이 칸에 딱 맞는다.
 // size 10 이하는 작은 글씨, 그 외는 굵은 글씨. 더 크게는 drawCentered의 정수 배율로 키운다.
