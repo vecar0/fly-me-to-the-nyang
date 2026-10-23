@@ -1,12 +1,12 @@
 // 루프 연결: 모드(title/play/pause/over/dex), 이벤트 → 연출/사운드/저장.
-import { VIEW_W, VIEW_H, VIEW_H_MIN, setViewH, CAT_TYPES, ZONES, CFG } from './config.js?v=1.7.0';
-import { Game, STEP } from './sim.js?v=1.7.0';
-import { dailySeed } from './spawner.js?v=1.7.0';
-import { Renderer } from './render.js?v=1.7.0';
-import { UI, pxText, fontsReady } from './ui.js?v=1.7.0';
-import { Audio } from './audio.js?v=1.7.0';
-import { bindInput } from './input.js?v=1.7.0';
-import { load, save } from './storage.js?v=1.7.0';
+import { VIEW_W, VIEW_H, VIEW_H_MIN, setViewH, CAT_TYPES, ZONES, CFG } from './config.js?v=1.8.0';
+import { Game, STEP } from './sim.js?v=1.8.0';
+import { dailySeed } from './spawner.js?v=1.8.0';
+import { Renderer } from './render.js?v=1.8.0';
+import { UI, pxText, fontsReady } from './ui.js?v=1.8.0';
+import { Audio } from './audio.js?v=1.8.0';
+import { bindInput } from './input.js?v=1.8.0';
+import { load, save } from './storage.js?v=1.8.0';
 
 const canvas = document.getElementById('game');
 const screen = canvas.getContext('2d');
@@ -182,18 +182,39 @@ bindInput(canvas, {
 });
 
 // ---- 화면 크기: 정수 배율 ----
-// 고해상도 폰(dpr 2 이상)은 가로를 꽉 채운다. 소수 배율이라도 한 칸이 기기 픽셀 6~7개라 고르지 않은 게 안 보인다.
-// PC 등 dpr 1~2는 기존처럼 정수 배율. 남는 세로는 VIEW_H를 늘려서 채운다.
+// 세로로 긴 화면(폰): 가로를 꽉 채우고 남는 세로는 VIEW_H를 늘려 채운다.
+//   고해상도 폰(dpr ≥ 2)은 소수 배율(한 칸이 기기 픽셀 6~7개라 고르지 않은 게 안 보임), 그 밖엔 정수 배율.
+// 가로로 넓은 화면(노트북·PC): 세로 320칸을 화면 높이에 꽉 맞춘다. 남는 좌우는 띠.
+//   소수 배율이면 frame()에서 정수 배로 키운 뒤 부드럽게 줄여 칸 크기가 들쭉날쭉하지 않게 한다.
+// 저해상도 버퍼 → 화면. 정수 배율이면 그대로 최근접 확대.
+// 소수 배율(노트북 등 dpr < 2)이면 올림 정수배로 최근접 확대한 뒤 부드럽게 줄인다 (sharp bilinear).
+let upBuf = null;
+function present() {
+  const s = canvas.width / VIEW_W, dpr = window.devicePixelRatio || 1;
+  if (Number.isInteger(s) || dpr >= 2) {
+    screen.imageSmoothingEnabled = false;
+    screen.drawImage(renderer.buf, 0, 0, canvas.width, canvas.height);
+    return;
+  }
+  const k = Math.ceil(s), w = VIEW_W * k, h = VIEW_H * k;
+  if (!upBuf || upBuf.width !== w || upBuf.height !== h) {
+    upBuf = document.createElement('canvas'); upBuf.width = w; upBuf.height = h;
+  }
+  const u = upBuf.getContext('2d');
+  u.imageSmoothingEnabled = false;
+  u.drawImage(renderer.buf, 0, 0, w, h);
+  screen.imageSmoothingEnabled = true;
+  screen.imageSmoothingQuality = 'high';
+  screen.drawImage(upBuf, 0, 0, canvas.width, canvas.height);
+}
+
 function resize() {
   const dpr = window.devicePixelRatio || 1;
   const W = window.innerWidth * dpr, H = window.innerHeight * dpr;
   let s;
-  if (dpr >= 2) {
-    s = W / VIEW_W;
-    if (H / s < VIEW_H_MIN) s = H / VIEW_H_MIN; // 가로로 넓은 화면: 높이에 맞추고 좌우 띠
-  } else {
-    s = Math.max(1, Math.floor(Math.min(W / VIEW_W, H / VIEW_H_MIN)));
-  }
+  if (W / H >= VIEW_W / VIEW_H_MIN) s = H / VIEW_H_MIN;
+  else if (dpr >= 2) s = W / VIEW_W;
+  else s = Math.max(1, Math.floor(Math.min(W / VIEW_W, H / VIEW_H_MIN)));
   const prevH = VIEW_H;
   setViewH(Math.floor(H / s));
   if (VIEW_H !== prevH) renderer.resize();
@@ -249,7 +270,7 @@ function tick(dt) {
     }
   }
 
-  screen.drawImage(renderer.buf, 0, 0, canvas.width, canvas.height);
+  present();
   document.body.style.background = mode === 'dex' ? '#1b1640' : '#2b2236';
 }
 // 픽셀 폰트가 오면 시작 (느린 망에서도 1.5초 넘게 기다리지 않음)

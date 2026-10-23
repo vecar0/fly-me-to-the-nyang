@@ -1,7 +1,7 @@
 // 게임 규칙 + 물리. DOM 없이 돌아간다 (Matter는 globalThis.Matter).
 // 좌표: 월드 픽셀, y는 아래로 증가. 방석 윗면이 y=0, 높이 h = -y.
-import { CAT_TYPES, ZONES, CFG, S } from './config.js?v=1.7.0';
-import { mulberry32, pickType, craneSpeed, createWind, updateWind } from './spawner.js?v=1.7.0';
+import { CAT_TYPES, ZONES, CFG, S } from './config.js?v=1.8.0';
+import { mulberry32, pickType, craneSpeed, createWind, updateWind } from './spawner.js?v=1.8.0';
 
 const STEP = 1 / 60;
 const SUBSTEPS = 6; // 2로는 쌓인 탑이 10여 마리에서 저절로 무너져서 6으로 올림 (비용은 스텝당 0.1ms 미만)

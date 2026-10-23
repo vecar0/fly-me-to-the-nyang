@@ -46,7 +46,7 @@ export const CFG = {
   settleTime: 1.0,
   perfectTol: 2,
 
-  craneBase: 32, craneStep: 3, craneEvery: 6, craneMax: 90,
+  craneBase: 44, craneStep: 4, craneEvery: 6, craneMax: 110,
   craneMargin: 12, craneAbove: 75,
   respawnDelay: 0.7,
   // 가운데 쌓기 도우미: 크레인이 꼭대기 고양이 위(±slowZone)를 지날 땐 최저 slowMin배 속도,
